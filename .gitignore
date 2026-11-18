@@ -1,0 +1,13 @@
+# 虚拟环境与缓存
+.venv/
+__pycache__/
+*.pyc
+
+# 官方原始安装包（大文件，不入库）
+*.exe
+*.zip
+extracted/
+ref-*/official*
+
+# 参考项目（独立仓库，保留 LICENSE 引用即可）
+# ref-yunjianj/ 已含完整协议报告，入库

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>GANSS GS3104T PRO 本地驱动 (macOS)</title>
+<style>
+:root {
+  --bg: #f5f6f8; --card: #ffffff; --ink: #1a1d21; --muted: #6b7280;
+  --accent: #ff6a00; --accent-ink: #fff; --line: #e5e7eb;
+  --ok: #16a34a; --err: #dc2626;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg); color: var(--ink); min-height: 100vh; }
+header { background: var(--card); border-bottom: 1px solid var(--line);
+  padding: 14px 24px; display: flex; align-items: center; gap: 12px; }
+header .logo { font-weight: 800; letter-spacing: 2px; font-size: 20px; }
+header .sub { color: var(--muted); font-size: 13px; }
+main { max-width: 1080px; margin: 24px auto; padding: 0 24px; display: grid;
+  grid-template-columns: 300px 1fr; gap: 20px; align-items: start; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 20px; }
+h2 { font-size: 15px; margin-bottom: 14px; display: flex; justify-content: space-between;
+  align-items: center; }
+button { font: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--card);
+  border-radius: 8px; padding: 8px 14px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.device { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+  margin-bottom: 10px; cursor: pointer; font-size: 13px; }
+.device.active { border-color: var(--accent); background: #fff7f2; }
+.device .meta { color: var(--muted); font-size: 11px; margin-top: 4px; }
+label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; }
+select, input[type=text] { width: 100%; padding: 8px 10px; border: 1px solid var(--line);
+  border-radius: 8px; font: inherit; }
+.row { display: flex; gap: 12px; }
+.row > div { flex: 1; }
+input[type=range] { width: 100%; }
+.swatch { display: inline-block; width: 22px; height: 22px; border-radius: 6px;
+  border: 1px solid var(--line); vertical-align: middle; margin-right: 8px; }
+#status { font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-top: 14px;
+  display: none; white-space: pre-wrap; }
+#status.ok { display: block; background: #f0fdf4; color: var(--ok); }
+#status.err { display: block; background: #fef2f2; color: var(--err); }
+#status.info { display: block; background: #eff6ff; color: #2563eb; }
+.kbimg { width: 100%; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 12px; }
+.mode-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.mode { border: 1px solid var(--line); border-radius: 8px; padding: 8px 4px; text-align: center;
+  font-size: 12px; cursor: pointer; }
+.mode.active { border-color: var(--accent); background: #fff7f2; }
+.map-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+td, th { border-bottom: 1px solid var(--line); padding: 6px 4px; text-align: left; }
+.trace { font-size: 11px; color: var(--muted); max-height: 200px; overflow: auto;
+  font-family: ui-monospace, monospace; margin-top: 8px; }
+footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px; }
+.badge { font-size: 11px; background: #f3f4f6; border-radius: 999px; padding: 2px 10px;
+  color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">GANS<span style="color:var(--accent)">S</span></span>
+  <span>GS3104T PRO 键盘驱动</span>
+  <span class="badge">macOS 本地版</span>
+  <span style="flex:1"></span>
+  <span class="sub">127.0.0.1 · 数据不出本机</span>
+</header>
+<main>
+  <section class="card">
+    <h2>设备 <button id="btnScan" class="primary">刷新扫描</button></h2>
+    <div id="devices"><div class="meta">未扫描</div></div>
+    <h2 style="margin-top:20px">灯效模式</h2>
+    <div id="modes" class="mode-grid"></div>
+    <label>颜色 <span class="swatch" id="swatch"></span><input type="color" id="color" value="#ff6a00" style="width:100%;height:32px;border:none;background:none"></label>
+    <label>亮度 <span id="bv">4</span><input type="range" id="brightness" min="0" max="5" value="4"></label>
+    <label>速度 <span id="sv">3</span><input type="range" id="speed" min="0" max="5" value="3"></label>
+    <button id="btnLight" class="primary" style="width:100%;margin-top:10px">应用灯光</button>
+    <button id="btnLightOff" style="width:100%;margin-top:8px">关闭背光</button>
+  </section>
+  <section class="card">
+    <h2>按键映射 <span class="badge">Fn+Tab 开关驱动自定义</span></h2>
+    <div class="row">
+      <div>
+        <label>按键（来源）</label>
+        <input type="text" id="srcKey" list="keyList" placeholder="如 A / CapsLock / LCTRL">
+      </div>
+      <div>
+        <label>映射目标</label>
+        <input type="text" id="dstKey" list="keyList" placeholder="如 B / CTRL+C / default">
+      </div>
+      <div style="flex:0 0 120px">
+        <label>层</label>
+        <select id="layer"><option value="normal">普通层</option><option value="fn">Fn 层</option></select>
+      </div>
+      <div style="flex:0 0 auto; display:flex; align-items:flex-end; gap:8px; padding-bottom:0">
+        <button id="btnMap" class="primary">单键映射 (2.4G)</button>
+        <button id="btnRestore">恢复该键</button>
+      </div>
+    </div>
+    <datalist id="keyList"></datalist>
+    <h2 style="margin-top:24px">操作日志</h2>
+    <div id="status"></div>
+    <div id="trace" class="trace"></div>
+  </section>
+</main>
+<footer>基于开源逆向项目 (yunjianj/GANSS_GS3104T_Pro) 协议实现的本地驱动 · 仅支持 USB 直连 / 2.4G 接收器 · 非官方软件</footer>
+<script>
+const $ = id => document.getElementById(id);
+let devices = [], selected = null;
+
+const MODES = [[1,'静态恒亮'],[2,'单点亮'],[3,'单熄灭'],[4,'繁星点点'],[5,'漫天飞雪'],[6,'百花争艳'],[7,'动态呼吸'],[8,'光谱循环'],[9,'彩泉涌动'],[10,'多彩纵横'],[11,'随波逐流'],[12,'峰回路转'],[13,'一触即发'],[14,'一石二鸟'],[15,'涟漪扩散'],[16,'川流不息'],[17,'重峦叠嶂'],[18,'斜风细雨'],[19,'来回穿梭']];
+let curMode = 11;
+$('modes').innerHTML = MODES.map(([n,name]) =>
+  `<div class="mode${n===curMode?' active':''}" data-n="${n}">${n}<br>${name}</div>`).join('');
+$('modes').addEventListener('click', e => {
+  const el = e.target.closest('.mode'); if (!el) return;
+  curMode = +el.dataset.n;
+  document.querySelectorAll('.mode').forEach(m => m.classList.toggle('active', +m.dataset.n === curMode));
+});
+$('brightness').oninput = e => $('bv').textContent = e.target.value;
+$('speed').oninput = e => $('sv').textContent = e.target.value;
+$('color').oninput = e => $('swatch').style.background = e.target.value;
+$('swatch').style.background = $('color').value;
+
+function status(kind, text) { const s = $('status'); s.className = kind; s.textContent = text; }
+function showTrace(steps) { $('trace').textContent = (steps||[]).map(s => `${s.label}: ${s.hex}`).join('\n'); }
+
+async function api(method, params = {}) {
+  const r = await fetch('/api', {method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({api_version: 1, id: String(Date.now()), method, params})});
+  return r.json();
+}
+
+async function scan() {
+  status('info', '正在扫描…');
+  const res = await api('devices.scan');
+  if (!res.ok) return status('err', res.error.message);
+  devices = res.result.devices;
+  $('devices').innerHTML = devices.length ? devices.map((d,i) =>
+    `<div class="device${selected===i?' active':''}" data-i="${i}">${d.name}
+     <div class="meta">ID ${d.id} · 通道 ${d.connections.join('/')} · ${d.access_status}</div></div>`).join('')
+    : '<div class="meta">未发现键盘：请插入 2.4G 接收器或 USB 直连</div>';
+  status(devices.length ? 'ok' : 'err', devices.length ? `发现 ${devices.length} 台设备` : '未发现设备');
+}
+$('devices').addEventListener('click', e => {
+  const el = e.target.closest('.device'); if (!el) return;
+  selected = +el.dataset.i;
+  document.querySelectorAll('.device').forEach(d => d.classList.toggle('active', +d.dataset.i === selected));
+});
+$('btnScan').onclick = scan;
+
+async function needDevice() {
+  if (selected == null || !devices[selected]) { status('err', '请先扫描并选择设备'); return null; }
+  return devices[selected].name;
+}
+
+$('btnLight').onclick = async () => {
+  const dev = await needDevice(); if (!dev) return;
+  status('info', '正在写入灯光…');
+  const res = await api('lighting.set', {device: dev, mode: curMode,
+    color: $('color').value.slice(1).toUpperCase(),
+    brightness: +$('brightness').value, speed: +$('speed').value});
+  showTrace(res.result?.steps || res.result?.trace);
+  status(res.ok ? 'ok' : 'err', res.ok ? '灯光指令已发送，请确认键盘效果' : res.error.message);
+};
+$('btnLightOff').onclick = async () => {
+  const dev = await needDevice(); if (!dev) return;
+  status('info', '正在关闭背光…');
+  const res = await api('lighting.set', {device: dev, mode: 0});
+  status(res.ok ? 'ok' : 'err', res.ok ? '背光已关闭' : res.error.message);
+};
+
+$('btnMap').onclick = async () => {
+  const dev = await needDevice(); if (!dev) return;
+  const src = $('srcKey').value.trim(), dst = $('dstKey').value.trim();
+  if (!src || !dst) return status('err', '请填写来源键和目标键');
+  status('info', '正在写入映射…');
+  const res = await api('keymap.set', {device: dev, source: src, target: dst, layer: $('layer').value});
+  showTrace(res.result?.steps || res.result?.trace);
+  status(res.ok ? 'ok' : 'err', res.ok ? `已发送：${src} → ${dst}，请按键盘确认` : res.error.message);
+};
+$('btnRestore').onclick = async () => {
+  const dev = await needDevice(); if (!dev) return;
+  const src = $('srcKey').value.trim();
+  if (!src) return status('err', '请填写来源键');
+  status('info', '正在恢复默认…');
+  const res = await api('keymap.set', {device: dev, source: src, target: 'default', layer: 'normal'});
+  status(res.ok ? 'ok' : 'err', res.ok ? `已发送：${src} → 默认` : res.error.message);
+};
+
+api('keys.list').then(res => {
+  if (res.ok) $('keyList').innerHTML = res.result.keys.map(k => `<option value="${k.name}">`).join('');
+});
+scan();
+</script>
+</body>
+</html>
