@@ -145,7 +145,8 @@ class Driver(BaseDeviceDriver):
                             brightness=patch.get('brightness', 5),
                             speed=patch.get('speed', 3),
                             color=patch.get('color', 'FFFFFF'),
-                            colorful=patch.get('colorful', False))
+                            colorful=patch.get('colorful', False),
+                            direction=patch.get('direction', 0))
         completed = self._execute_with_wake(transport, plan)
         shadow = load_shadow(self.plugin_id, _default_shadow)
         shadow['lighting'] = patch

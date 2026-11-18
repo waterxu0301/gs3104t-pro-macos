@@ -107,12 +107,14 @@ def color_rgb(value):
     return bytes.fromhex(value.lstrip('#'))
 
 
-def light_plan(mode=11, brightness=5, speed=3, color='FFFFFF', colorful=False, connection='usb'):
+def light_plan(mode=11, brightness=5, speed=3, color='FFFFFF', colorful=False,
+               direction=0, connection='usb'):
     integer(mode, 0, 255, 'mode')
     integer(brightness, 0, 5, 'brightness')
     integer(speed, 0, 5, 'speed')
     if type(colorful) is not bool:
         raise ConfigError('colorful 必须为布尔值')
+    integer(direction, 0, 255, 'direction')
     rgb = color_rgb(color)
     if connection == 'usb':
         # 0x408520 loads the struct at ebp-0x88. 0x42B144..162 writes
@@ -121,7 +123,7 @@ def light_plan(mode=11, brightness=5, speed=3, color='FFFFFF', colorful=False, c
         p[0] = mode
         if mode:
             p[1:4] = rgb
-            p[8:12] = bytes((int(colorful), brightness, speed, 0))
+            p[8:12] = bytes((int(colorful), brightness, speed, direction))
         p[14:16] = b'\xaa\x55'
         return [Step('准备灯光事务', 'feature', command(0x18), True),
                 Step('选择灯光参数块', 'feature', command(0x13, 1), True),
@@ -135,7 +137,7 @@ def light_plan(mode=11, brightness=5, speed=3, color='FFFFFF', colorful=False, c
         p[4] = mode
         if mode:
             p[5:8] = rgb
-            p[12:16] = bytes((int(colorful), brightness, speed, 0))
+            p[12:16] = bytes((int(colorful), brightness, speed, direction))
         p[18:20] = b'\xaa\x55'
         return [Step('写入无线灯光参数', 'short', short_packet(p), True, 5)]
     raise ConfigError('connection 必须为 usb 或 wireless')

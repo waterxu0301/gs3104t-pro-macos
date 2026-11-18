@@ -200,7 +200,6 @@ pre.mono{background:var(--g-gray-bg);padding:12px;border-radius:8px;font-size:11
           <option value="key">按键 / 组合键</option>
           <option value="media">多媒体键</option>
           <option value="disabled">禁用按键</option>
-          <option value="macro">宏绑定（槽位）</option>
         </select>
         <div id="uiKey">
           <label class="f">目标键 / 组合键（如 LCtrl+C）</label>
@@ -210,10 +209,6 @@ pre.mono{background:var(--g-gray-bg);padding:12px;border-radius:8px;font-size:11
         <div id="uiMedia" class="hidden">
           <label class="f">多媒体键（Consumer Page LE）</label>
           <select class="f" id="mediaKey"></select>
-        </div>
-        <div id="uiMacro" class="hidden">
-          <label class="f">宏槽位（0-99）</label>
-          <input class="f" id="macroSlot" type="number" min="0" max="99" value="0">
         </div>
         <div class="btnrow">
           <button class="m3 primary" onclick="applyMap()">下发映射</button>
@@ -232,9 +227,28 @@ pre.mono{background:var(--g-gray-bg);padding:12px;border-radius:8px;font-size:11
         </div>
         <div class="card">
           <h2>设备状态</h2>
-          <div id="kbStateInfo" class="device-info" style="font-size:12px;color:var(--g-sub);line-height:1.7">—</div>
-          <div class="btnrow"><button class="m3 primary" onclick="kbLighting()">测试灯光</button></div>
+          <div id="kbStateInfo" style="font-size:12px;color:var(--g-sub);line-height:1.7">—</div>
         </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2><svg><use href="#i-light"/></svg>灯光控制
+        <span style="flex:1"></span>
+        <span class="pill ro" id="lightModeDesc"></span>
+      </h2>
+      <div id="lightModes" style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px"></div>
+      <div style="display:flex;gap:16px;margin-top:16px;flex-wrap:wrap;align-items:center">
+        <label class="f" style="margin:0">颜色 <input type="color" id="lightColor" value="#1A73E8" style="width:46px;height:34px;padding:2px;vertical-align:middle"></label>
+        <label class="f" style="margin:0">亮度 <input type="range" id="lightBri" min="0" max="5" value="4" oninput="lightBriV.textContent=this.value"> <b id="lightBriV">4</b></label>
+        <label class="f" style="margin:0">速度 <input type="range" id="lightSpd" min="0" max="5" value="3" oninput="lightSpdV.textContent=this.value"> <b id="lightSpdV">3</b></label>
+        <label class="f" style="margin:0;display:flex;gap:6px;align-items:center"><input type="checkbox" id="lightColorful"> 炫彩混光</label>
+        <label class="f" style="margin:0">方向
+          <select class="f" id="lightDir" style="width:auto;padding:5px 10px">
+            <option value="0">默认</option><option value="1">左 → 右</option>
+            <option value="2">右 → 左</option><option value="3">上 → 下</option><option value="4">下 → 上</option>
+          </select></label>
+        <button class="m3 primary" onclick="applyLightFull()">应用灯光</button>
+        <button class="m3" onclick="lightOff()">关闭背光</button>
       </div>
     </div>
   </section>

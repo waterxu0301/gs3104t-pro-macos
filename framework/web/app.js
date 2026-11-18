@@ -6,6 +6,7 @@ let msButtons = {}, msSelBtn = null, msState = { sensorType: 149, maxReportRate:
 let commLines = [];
 let whidDev = null;
 
+const LIGHT_MODES_META = {"1": {"name": "静态恒亮", "func": 49}, "2": {"name": "单点亮", "func": 51}, "3": {"name": "单熄灭", "func": 51}, "4": {"name": "繁星点点", "func": 51}, "5": {"name": "漫天飞雪", "func": 51}, "6": {"name": "百花争艳", "func": 3}, "7": {"name": "动态呼吸", "func": 51}, "8": {"name": "光谱循环", "func": 3}, "9": {"name": "彩泉涌动", "func": 51}, "10": {"name": "多彩纵横", "func": 59}, "11": {"name": "随波逐流", "func": 55}, "12": {"name": "峰回路转", "func": 55}, "13": {"name": "一触即发", "func": 51}, "14": {"name": "一石二鸟", "func": 51}, "15": {"name": "涟漪扩散", "func": 51}, "16": {"name": "川流不息", "func": 55}, "17": {"name": "重峦叠嶂", "func": 51}, "18": {"name": "斜风细雨", "func": 55}, "19": {"name": "来回穿梭", "func": 51}, "0": {"name": "关闭背光", "func": 0}};
 const MODES = [[0,'关闭'],[1,'静态恒亮'],[2,'单点亮'],[3,'单熄灭'],[4,'繁星点点'],[5,'漫天飞雪'],[6,'百花争艳'],[7,'动态呼吸'],[8,'光谱循环'],[9,'彩泉涌动'],[10,'多彩纵横'],[11,'随波逐流'],[12,'峰回路转'],[13,'一触即发'],[14,'一石二鸟'],[15,'涟漪扩散'],[16,'川流不息'],[17,'重峦叠嶂'],[18,'斜风细雨'],[19,'来回穿梭']];
 const MEDIA_KEYS = ['音量+','音量-','静音','播放暂停','播放停止','上一曲','下一曲','计算器','多媒体','主页','刷新','前进','后退','收藏','搜索','邮箱'];
 const RATE_LABELS = {8:'125Hz',4:'250Hz',2:'500Hz',1:'1000Hz',17:'2000Hz',18:'4000Hz',20:'8000Hz'};
@@ -87,6 +88,7 @@ async function initKb(d) {
     $('mediaKey').innerHTML = mediaKeys.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
     buildCanvas(); buildUsageList(); buildModifiers();
   }
+  renderLightModes();
   refreshProfiles();
 }
 function buildCanvas() {
@@ -116,7 +118,6 @@ function selectKey(i) {
   renderTypeUI();
   if (cur) {
     if (cur.startsWith('media:')) { $('mapType').value='media'; $('mediaKey').value=cur; }
-    else if (cur.startsWith('macro:')) { $('mapType').value='macro'; $('macroSlot').value=cur.slice(6); }
     else if (cur === 'disabled') $('mapType').value = 'disabled';
     else if (cur !== 'default') { $('mapType').value='key'; $('comboKey').value=cur; }
     else $('mapType').value='default';
@@ -168,7 +169,6 @@ async function applyMap() {
   if (t === 'key') { target = comboFromUI(); if (!target) return status('err','请填写目标键'); }
   if (t === 'media') target = $('mediaKey').value;
   if (t === 'disabled') target = 'disabled';
-  if (t === 'macro') target = `macro:${$('macroSlot').value}`;
   const r = await api('device.apply', {device: curDev, module:'keymap', patch:{source:k.name, target, layer}});
   if (r.ok) { modified[layer][k.name] = target; refreshBadges();
     status('ok', `${k.name} → ${target} 已下发（硬件 ACK）` + (r.result.apply.note ? '\n' + r.result.apply.note : '')); }
@@ -192,10 +192,49 @@ async function restoreLayer() {
   if (r.ok) { modified[layer] = {}; refreshBadges(); status('ok','全层已恢复默认'); }
   else status('err', r.error.message);
 }
-async function kbLighting() {
-  const r = await api('device.apply', {device:curDev, module:'lighting', patch:{mode:1, color:'1A73E8', brightness:4, speed:3}});
-  status(r.ok?'ok':'err', r.ok?'灯光已切换（Google Blue）':r.error.message);
+
+/* ---- 灯光面板（官方 19 模式联动） ---- */
+let curLightMode = 11;
+function renderLightModes() {
+  $('lightModes').innerHTML = MODES.map(([n, name]) =>
+    `<div class="mode" data-n="${n}" onclick="selectLightMode(${n})"
+      style="border:1px solid var(--g-line);border-radius:10px;padding:8px 4px;text-align:center;
+      font-size:12px;cursor:pointer;${n===curLightMode?'background:var(--g-blue-bg);border-color:var(--g-blue);color:var(--g-blue-ink)':''}">
+      ${name}</div>`).join('');
+  updateLightControls();
 }
+function selectLightMode(n) {
+  curLightMode = n;
+  renderLightModes();
+}
+function updateLightControls() {
+  const f = LIGHT_MODES_META[curLightMode] ? LIGHT_MODES_META[curLightMode].func : 51;
+  const briOk = f !== 3 && f !== 0;
+  const spdOk = f >= 51 || f === 3;
+  const dirOk = f === 55;
+  const colorfulOk = f === 49 || f === 51 || f === 55;
+  const colorOk = f !== 0 && f !== 3 && f !== 59;
+  $('lightBri').disabled = !briOk; $('lightSpd').disabled = !spdOk;
+  $('lightColor').disabled = !colorOk; $('lightColorful').disabled = !colorfulOk;
+  $('lightDir').disabled = !dirOk;
+  $('lightModeDesc').textContent = (LIGHT_MODES_META[curLightMode]?.name || '') +
+    (dirOk ? ' · 支持方向' : '') + (colorfulOk ? ' · 支持炫彩' : '');
+}
+async function applyLightFull() {
+  const r = await api('device.apply', {device: curDev, module: 'lighting', patch: {
+    mode: curLightMode,
+    color: $('lightColor').value.slice(1).toUpperCase(),
+    brightness: +$('lightBri').value,
+    speed: +$('lightSpd').value,
+    colorful: $('lightColorful').checked,
+    direction: +$('lightDir').value}});
+  status(r.ok ? 'ok' : 'err', r.ok ? `灯光已下发（模式 ${curLightMode}，ACK）` : r.error.message);
+}
+async function lightOff() {
+  const r = await api('device.apply', {device: curDev, module: 'lighting', patch: {mode: 0}});
+  status(r.ok ? 'ok' : 'err', r.ok ? '背光已关闭' : r.error.message);
+}
+
 
 /* profiles */
 async function refreshProfiles() {
