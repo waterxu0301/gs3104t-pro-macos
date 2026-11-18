@@ -11,3 +11,5 @@ ref-*/official*
 
 # 参考项目（独立仓库，保留 LICENSE 引用即可）
 # ref-yunjianj/ 已含完整协议报告，入库
+__pycache__/
+*.pyc

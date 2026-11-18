@@ -1,0 +1,35 @@
+{
+  "spec_version": 1,
+  "plugin_id": "ganss_gs3104t_pro",
+  "name": "GANSS GS3104T PRO 键盘",
+  "device_type": "keyboard",
+  "version": "1.0.0",
+  "author": "ganss-driver contributors",
+  "license": "MIT",
+
+  "match": [
+    {
+      "vid": "0x05AC",
+      "pid": ["0x024F"],
+      "product_regex": "GS3104T"
+    }
+  ],
+
+  "capabilities": ["lighting", "keymap", "layers"],
+  "ui_modules": [
+    {"component": "keyboard-canvas", "props": {"layout": "data/keymap.json", "keys": 112}},
+    {"component": "lighting-panel", "props": {"modes": 19, "brightness_max": 5, "speed_max": 5}}
+  ],
+
+  "safety": {
+    "default_mode": "SHADOW_STATE_ACK",
+    "modules": {
+      "lighting": "SHADOW_STATE_ACK",
+      "keymap": "SHADOW_STATE_ACK"
+    },
+    "notes": "键位层与全局灯效无硬件回读命令；依赖逐包 ACK + 本地 Shadow State。映射生效需 Fn+Tab 开启驱动自定义模式。"
+  },
+
+  "connection": ["wired", "2.4g"],
+  "entry": "driver.Driver"
+}
