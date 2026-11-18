@@ -67,7 +67,7 @@ class Api:
             return {'devices': self.pm.enumerate_all()}
 
         # device-scoped methods
-        _fields(params, ('device', 'module', 'patch', 'scope', 'name', 'data'),
+        _fields(params, ('device', 'module', 'patch', 'scope', 'name', 'data', 'layer', 'state'),
                 ('device',))
         # mock device: no hardware IO; reflect shadow state only
         if params['device'].endswith(':mock'):
@@ -91,7 +91,12 @@ class Api:
                 if method == 'device.reset':
                     scope = params.get('scope', 'all')
                     return {'device': device,
-                            'reset': driver.reset_default(*conn, scope)}
+                            'reset': driver.reset_default(*conn, scope, layer=params.get('layer', 'normal'))}
+                if method == 'device.telemetry':
+                    _fields(params, ('device', 'state'), ('device', 'state'))
+                    if hasattr(driver, 'update_telemetry'):
+                        driver.update_telemetry(params['state'])
+                    return {'ok': True}
                 if method == 'keys.list':
                     return {'keys': driver.keys_list(),
                             'media_keys': getattr(driver, 'media_keys_list', list)()}

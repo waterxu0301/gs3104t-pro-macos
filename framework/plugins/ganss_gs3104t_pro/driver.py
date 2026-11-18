@@ -114,6 +114,10 @@ class Driver(BaseDeviceDriver):
             return self._apply_keymap(transport, connection, patch)
         if module == 'macro':
             return self._apply_macro(transport, connection, patch)
+        if module == 'keymap_full':
+            return self._apply_full_layer(transport, connection, patch)
+        if module == 'keymap_multi':
+            return self._apply_multi(transport, connection, patch)
         raise ConfigError(f'未知模块: {module}')
 
     def _apply_macro(self, transport, connection, patch):
@@ -184,10 +188,73 @@ class Driver(BaseDeviceDriver):
         return {'completed_steps': completed, 'verified': 'ack_only',
                 'note': '宏绑定记录已下发；宏内容定义请使用 device.apply module=macro'}
 
-    def reset_default(self, transport, connection, scope):
-        if scope != 'key':
-            raise ConfigError('当前版本支持单键恢复；整层恢复请用 device.apply keymap target=default')
-        raise ConfigError('reset 需要 patch.source 指明按键')
+    def reset_default(self, transport, connection, scope, layer='normal'):
+        if scope == 'layer':
+            return self._restore_full_layer(transport, connection, layer)
+        raise ConfigError('reset scope 支持 key/layer')
+    def _apply_full_layer(self, transport, connection, patch):
+        """整层下发：基于 shadow 里的映射构造 576B 表（普通层 04 11 / Fn 层 04 27）"""
+        layer = patch.get('layer', 'normal')
+        mappings = patch.get('mappings', {})
+        table = self._build_layer_table(layer, mappings)
+        plan = self._layer_plan(table, layer, connection)
+        completed = self._execute_with_wake(transport, plan)
+        shadow = load_shadow(self.plugin_id, _default_shadow)
+        shadow.setdefault('keymap', {})[layer] = mappings
+        save_shadow(self.plugin_id, shadow)
+        return {'completed_steps': completed, 'verified': 'ack_only',
+                'note': f'{layer} 层整表（576B/9 块）已下发'}
+
+    def _apply_multi(self, transport, connection, patch):
+        """模板批量映射：逐键短报文下发（2.4G 高效路径）"""
+        layer = patch.get('layer', 'normal')
+        mappings = patch.get('mappings', {})
+        completed = 0
+        for source, target in mappings.items():
+            plan = _keymap_plan_with_record(source, target, layer, connection)
+            completed += self._execute_with_wake(transport, plan)
+        shadow = load_shadow(self.plugin_id, _default_shadow)
+        shadow.setdefault('keymap', {}).setdefault(layer, {}).update(mappings)
+        save_shadow(self.plugin_id, shadow)
+        return {'completed_steps': completed, 'verified': 'ack_only',
+                'note': f'模板批量映射 {len(mappings)} 键已下发'}
+
+    def _restore_full_layer(self, transport, connection, layer):
+        table = self._build_layer_table(layer, {})
+        plan = self._layer_plan(table, layer, connection)
+        completed = self._execute_with_wake(transport, plan)
+        shadow = load_shadow(self.plugin_id, _default_shadow)
+        shadow.setdefault('keymap', {})[layer] = {}
+        save_shadow(self.plugin_id, shadow)
+        return {'completed_steps': completed, 'verified': 'ack_only',
+                'note': f'{layer} 层已恢复全默认'}
+
+    def _build_layer_table(self, layer, mappings):
+        table = bytearray(576)
+        for source, target in mappings.items():
+            if target in (None, '', 'default'):
+                continue
+            rec = _legacy_record(target)
+            if rec is None:
+                continue
+            try:
+                key = P.resolve_key(source)
+            except Exception:
+                continue
+            idx = int(key['key_index'])
+            table[idx*4:idx*4+4] = rec
+        table[-2:] = b'\xaa\x55'
+        return bytes(table)
+
+    def _layer_plan(self, table, layer, connection):
+        cmd = 0x27 if layer == 'fn' else 0x11
+        plan = [P.Step('准备键位事务', 'feature', P.command(0x18), True),
+                P.Step(f'选择{layer}层', 'feature', P.command(cmd, 9), True)]
+        plan += [P.Step(f'键位块 {i//64+1}/9', 'feature', P.feature(table[i:i+64]))
+                 for i in range(0, 576, 64)]
+        plan += [P.Step('结束键位事务', 'feature', P.command(2), True),
+                 P.Step('刷新键位', 'feature', P.command(0xF0), True)]
+        return plan
 
     def _execute(self, transport, plan):
         try:
@@ -334,7 +401,12 @@ class _TransportAdapter:
         self.t.send_feature(0, payload)
 
     def get_feature(self):
-        raw = self.t.get_feature(0, 64)
+        try:
+            raw = self.t.get_feature(0, 64)
+        except OSError as e:
+            # read error usually means the keyboard went to sleep mid-transaction;
+            # raise ProtocolError so the wake-retry loop in _execute_with_wake kicks in
+            raise ProtocolError(f'Feature 读取失败（设备可能休眠）: {e}') from e
         # normalize: 65B w/ leading zero or 64B bare
         if len(raw) == 65 and raw[0] == 0:
             return raw[1:]

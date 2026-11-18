@@ -261,6 +261,13 @@ class Driver(BaseDeviceDriver):
     def reset_default(self, transport, connection, scope):
         return self._apply_reset(transport, {})
 
+    def update_telemetry(self, state):
+        """WebHID bridge pushes live telemetry here for shadow/status sync."""
+        self._telemetry = state
+        if state.get('sensorType'):
+            self._telemetry['sensorType'] = state['sensorType']
+        return True
+
     # ---- frontend helpers ---------------------------------------------------
 
     def keys_list(self):

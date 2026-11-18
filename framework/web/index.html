@@ -2,154 +2,251 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>GANSS 键鼠驱动中心</title>
+<title>GANSS Device Hub</title>
 <style>
-:root{--bg:#f5f6f8;--card:#fff;--ink:#1a1d21;--muted:#6b7280;--accent:#ff6a00;--line:#e5e7eb;
-  --ok:#16a34a;--err:#dc2626;--modified:#2563eb;--sleep:#f59e0b}
+:root{
+  --g-surface:#FFFFFF;--g-bg:#F8F9FA;--g-line:#DADCE0;--g-line2:#E8EAED;
+  --g-ink:#202124;--g-sub:#5F6368;--g-disabled:#9AA0A6;
+  --g-blue:#1A73E8;--g-blue-hover:#1557B0;--g-blue-bg:#E8F0FE;--g-blue-ink:#1967D2;
+  --g-green:#1E8E3E;--g-green-bg:#E6F4EA;
+  --g-amber:#B06000;--g-amber-bg:#FEF7E0;
+  --g-gray:#5F6368;--g-gray-bg:#F1F3F4;
+  --g-red:#C5221F;--g-red-bg:#FCE8E6;
+  --shadow-pop:0 1px 3px rgba(60,64,67,.15);
+  --mono:'Roboto Mono','JetBrains Mono',ui-monospace,monospace;
+}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,'PingFang SC',sans-serif;background:var(--bg);color:var(--ink)}
-header{background:var(--card);border-bottom:1px solid var(--line);padding:12px 24px;display:flex;gap:12px;align-items:center}
-.logo{font-weight:800;font-size:20px;letter-spacing:2px}
-.badge{font-size:11px;background:#f3f4f6;border-radius:999px;padding:2px 10px;color:var(--muted)}
-.badge.warn{background:#fef3c7;color:#92400e}
-.badge.battery{background:#dcfce7;color:#166534}
-.devbar{display:flex;gap:10px;margin-top:10px}
-.devtab{flex:1;padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:#fff;
-  cursor:pointer;display:flex;align-items:center;gap:10px}
-.devtab.active{border-color:var(--accent);background:#fff7f2}
-.devtab .nm{font-weight:600;font-size:14px}
-.devtab .st{font-size:11px;color:var(--muted)}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
-.dot.sleep{background:var(--sleep)}
-.sleepbar{display:none;background:#fef3c7;color:#92400e;padding:8px 14px;border-radius:10px;
-  margin-top:10px;font-size:13px;align-items:center;gap:10px}
+body{font-family:system-ui,-apple-system,'Google Sans','Inter','PingFang SC','Microsoft YaHei',sans-serif;
+  background:var(--g-bg);color:var(--g-ink);font-size:14px}
+/* ---- Top App Bar ---- */
+.appbar{height:64px;background:var(--g-surface);border-bottom:1px solid var(--g-line2);
+  display:flex;align-items:center;gap:16px;padding:0 24px;position:sticky;top:0;z-index:50}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:16px}
+.brand svg{color:var(--g-blue)}
+.devbar{display:flex;gap:8px;margin-left:8px}
+.devtab{display:flex;align-items:center;gap:10px;padding:8px 16px;border-radius:9999px;
+  border:1px solid transparent;cursor:pointer;font-size:13px;color:var(--g-sub)}
+.devtab:hover{background:var(--g-gray-bg)}
+.devtab.active{background:var(--g-blue-bg);color:var(--g-blue-ink);border-color:var(--g-blue)}
+.devtab svg{width:20px;height:20px}
+.conn-chip{font-size:11px;padding:1px 8px;border-radius:9999px;background:var(--g-gray-bg);color:var(--g-gray)}
+.status-dot{width:8px;height:8px;border-radius:50%;flex:none}
+.dot-ok{background:var(--g-green)}
+.dot-sleep{background:var(--g-amber)}
+.dot-ro{background:var(--g-gray)}
+.dot-err{background:var(--g-red)}
+.batt{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--g-sub)}
+.batt-bar{width:22px;height:10px;border:1px solid var(--g-sub);border-radius:2px;position:relative;overflow:hidden}
+.batt-fill{position:absolute;inset:1px auto 1px 1px;background:var(--g-green);border-radius:1px}
+.appbar .spacer{flex:1}
+.iconbtn{width:40px;height:40px;border-radius:50%;border:none;background:transparent;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:var(--g-sub)}
+.iconbtn:hover{background:var(--g-gray-bg)}
+.iconbtn svg{width:22px;height:22px}
+/* ---- layout ---- */
+main{max-width:1320px;margin:20px auto;padding:0 24px}
+.card{background:var(--g-surface);border:1px solid var(--g-line);border-radius:12px;padding:20px;margin-bottom:16px}
+.card h2{font-size:15px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.card h2 svg{width:20px;height:20px;color:var(--g-sub)}
+.grid2{display:grid;grid-template-columns:1fr 340px;gap:16px;align-items:start}
+/* ---- segmented button ---- */
+.seg{display:inline-flex;border:1px solid var(--g-line);border-radius:9999px;overflow:hidden}
+.seg button{border:none;background:transparent;padding:7px 20px;font:inherit;font-size:13px;
+  color:var(--g-sub);cursor:pointer}
+.seg button.active{background:var(--g-blue-bg);color:var(--g-blue-ink);font-weight:500}
+/* ---- buttons ---- */
+button.m3{font:inherit;font-size:13px;padding:8px 18px;border-radius:9999px;cursor:pointer;
+  border:1px solid var(--g-line);background:var(--g-surface);color:var(--g-blue)}
+button.m3:hover{background:var(--g-blue-bg)}
+button.m3.primary{background:var(--g-blue);color:#fff;border-color:var(--g-blue)}
+button.m3.primary:hover{background:var(--g-blue-hover)}
+button.m3:disabled{color:var(--g-disabled);border-color:var(--g-line2);background:var(--g-gray-bg);cursor:not-allowed}
+/* ---- pills ---- */
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 12px;border-radius:9999px}
+.pill svg{width:14px;height:14px}
+.pill.ok{background:var(--g-green-bg);color:var(--g-green)}
+.pill.warn{background:var(--g-amber-bg);color:var(--g-amber)}
+.pill.ro{background:var(--g-gray-bg);color:var(--g-gray)}
+.pill.err{background:var(--g-red-bg);color:var(--g-red)}
+/* ---- keyboard canvas ---- */
+#kb{margin:12px auto 0}
+.keyrect{fill:#FFF;stroke:#BDC1C6;stroke-width:1;cursor:pointer;transition:transform .08s}
+.keyrect:hover{fill:#F1F6FE;transform:scale(1.04)}
+.keyrect.selected{stroke:var(--g-blue);stroke-width:2.5}
+.keyrect.modified{fill:var(--g-blue-bg);stroke:var(--g-blue);stroke-width:1.5}
+.keyrect.reserved{fill:var(--g-gray-bg);stroke-dasharray:3 2}
+.keylabel{font-size:9px;fill:var(--g-ink);pointer-events:none;user-select:none}
+.keysub{font-size:7px;fill:var(--g-blue);pointer-events:none;font-weight:600}
+/* ---- forms ---- */
+label.f{display:block;font-size:12px;color:var(--g-sub);margin:12px 0 4px}
+select.f,input.f{width:100%;padding:9px 12px;border:1px solid var(--g-line);border-radius:8px;font:inherit;font-size:13px;background:#fff}
+.mods{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}
+.mods label{display:flex;gap:5px;align-items:center;font-size:11px;color:var(--g-ink)}
+.btnrow{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+/* ---- status bar ---- */
+#status{font-size:13px;padding:10px 16px;border-radius:8px;margin-top:12px;display:none}
+#status.ok{display:block;background:var(--g-green-bg);color:var(--g-green)}
+#status.err{display:block;background:var(--g-red-bg);color:var(--g-red)}
+#status.info{display:block;background:var(--g-blue-bg);color:var(--g-blue-ink)}
+#status.warn{display:block;background:var(--g-amber-bg);color:var(--g-amber)}
+/* ---- sleep banner ---- */
+.sleepbar{display:none;align-items:center;gap:10px;background:var(--g-amber-bg);color:var(--g-amber);
+  padding:10px 16px;border-radius:10px;margin-bottom:14px;font-size:13px}
 .sleepbar.show{display:flex}
-main{max-width:1280px;margin:20px auto;padding:0 24px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:16px}
-h2{font-size:14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
-button{font:inherit;cursor:pointer;border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 12px}
-button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
-button:disabled{opacity:.5;cursor:not-allowed}
-.tabs{display:flex;gap:2px;border-bottom:2px solid var(--line);margin-bottom:14px}
-.tabs button{border:none;border-radius:8px 8px 0 0;padding:8px 18px;background:transparent}
-.tabs button.active{color:var(--accent);border-bottom:2px solid var(--accent);font-weight:600}
-.grid2{display:grid;grid-template-columns:1fr 340px;gap:16px}
-.layer-switch{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
-.layer-switch button{border:none;border-radius:0;padding:6px 16px}
-.layer-switch button.active{background:var(--accent);color:#fff}
-.keyrect{fill:#fff;stroke:#9ca3af;stroke-width:1;cursor:pointer}
-.keyrect:hover{fill:#fff7f2}
-.keyrect.selected{stroke:var(--accent);stroke-width:2.5}
-.keyrect.modified{stroke:var(--modified);stroke-width:2}
-.keyrect.reserved{fill:#f3f4f6;stroke-dasharray:3 2}
-.keylabel{font-size:9px;fill:#374151;pointer-events:none}
-.keymap-badge{font-size:8px;fill:var(--modified);pointer-events:none;font-weight:700}
-.panel label{display:block;font-size:12px;color:var(--muted);margin:8px 0 4px}
-.panel select,.panel input{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px}
-.mods{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px}
-.mods label{display:flex;gap:4px;font-size:11px;margin:0;color:var(--ink)}
-#status{font-size:13px;padding:10px;border-radius:8px;margin-top:10px;display:none;white-space:pre-wrap}
-#status.ok{display:block;background:#f0fdf4;color:var(--ok)}
-#status.err{display:block;background:#fef2f2;color:var(--err)}
-#status.info{display:block;background:#eff6ff;color:#2563eb}
-.profile-item{display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;font-size:13px}
-.btnrow{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
-.dpi-stage{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px}
-.dpi-stage .row{display:flex;gap:8px;align-items:center}
-.dpi-stage input[type=range]{flex:1}
-.macro-ev{display:flex;gap:6px;margin-bottom:4px;font-size:11px;align-items:center}
-.macro-ev input,.macro-ev select{width:80px;padding:3px 6px}
-.mouseview{position:relative;text-align:center}
-.mousebtn{cursor:pointer}
-.mousebtn.active circle{stroke:var(--accent);stroke-width:3}
-.radio-group{display:flex;gap:6px;flex-wrap:wrap}
-.radio-group label{display:flex;gap:4px;align-items:center;font-size:12px;margin:0;color:var(--ink);
-  border:1px solid var(--line);border-radius:8px;padding:5px 10px;cursor:pointer}
-.radio-group input{width:auto}
-.switch-row{display:flex;gap:16px;flex-wrap:wrap;margin-top:8px}
-.switch-row label{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--ink);margin:0}
+.sleepbar svg{width:18px;height:18px}
+/* ---- profiles ---- */
+.profile-item{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;
+  border:1px solid var(--g-line);border-radius:10px;margin-bottom:6px;font-size:13px}
+.profile-item:hover{background:var(--g-gray-bg)}
+/* ---- mouse tabs ---- */
+.tabs{display:flex;gap:4px;margin-bottom:14px}
+.tabs button{border:none;background:transparent;padding:8px 20px;border-radius:9999px;font:inherit;
+  font-size:13px;color:var(--g-sub);cursor:pointer}
+.tabs button.active{background:var(--g-blue-bg);color:var(--g-blue-ink);font-weight:500}
 .hidden{display:none}
-.device-info{font-size:12px;color:var(--muted);margin:6px 0}
+.dpi-stage{border:1px solid var(--g-line);border-radius:10px;padding:12px;margin-bottom:8px}
+.dpi-stage .row{display:flex;gap:10px;align-items:center}
+.dpi-stage input[type=number]{width:90px;padding:6px 8px;border:1px solid var(--g-line);border-radius:8px}
+input[type=range]{accent-color:var(--g-blue)}
+.switch-row{display:flex;gap:18px;flex-wrap:wrap;margin-top:10px}
+.switch-row label{display:flex;gap:6px;font-size:13px;align-items:center;color:var(--g-ink)}
+.mono{font-family:var(--mono)}
+/* ---- drawers ---- */
+.drawer-mask{position:fixed;inset:0;background:rgba(32,33,36,.4);display:none;z-index:90}
+.drawer-mask.show{display:block}
+.drawer{position:fixed;top:0;right:-420px;width:420px;height:100vh;background:var(--g-surface);
+  z-index:100;transition:right .25s;box-shadow:var(--shadow-pop);padding:20px;overflow:auto}
+.drawer.show{right:0}
+.drawer h3{font-size:15px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center}
+pre.mono{background:var(--g-gray-bg);padding:12px;border-radius:8px;font-size:11px;max-height:60vh;overflow:auto;font-family:var(--mono)}
+/* ---- menus ---- */
+.menu{position:absolute;background:var(--g-surface);border:1px solid var(--g-line);border-radius:10px;
+  box-shadow:var(--shadow-pop);padding:6px 0;min-width:220px;z-index:120;display:none}
+.menu.show{display:block}
+.menu .mi{padding:9px 18px;font-size:13px;cursor:pointer}
+.menu .mi:hover{background:var(--g-gray-bg)}
+.menu .mi svg{width:16px;height:16px;vertical-align:-3px;margin-right:8px;color:var(--g-sub)}
+/* mouse svg */
+.mouseview{text-align:center;margin:8px 0}
+.mbtn{cursor:pointer}
+.mbtn.active circle{stroke:var(--g-blue);stroke-width:3}
+.dpi-cfg{border:1px solid var(--g-line);border-radius:10px;padding:12px;margin-bottom:8px}
 </style>
 </head>
 <body>
-<header>
-  <span class="logo">GANS<span style="color:var(--accent)">S</span></span><span>键鼠驱动中心</span>
-  <span class="badge warn" id="fnTabBadge">⚠ 键盘映射生效需 Fn+Tab</span>
-  <span style="flex:1"></span>
-  <span class="badge" onclick="toggleMock()" style="cursor:pointer" title="GANSS_FLX3_MOCK=1 环境变量控制">虚拟预览</span>
-</header>
-<main>
-  <div id="devbar" class="devbar"></div>
-  <div id="sleepbar" class="sleepbar">🌙 设备休眠中（按任意键/移动鼠标唤醒后可同步） <button onclick="syncPending()">唤醒并立即同步</button></div>
+<!-- Material Symbols sprite -->
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-kb" viewBox="0 0 24 24"><path fill="currentColor" d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2m-9 3h2v2h-2zm0 3h2v2h-2zM8 8h2v2H8zm0 3h2v2H8zm-1 2H5v-2h2zm0-3H5V8h2zm9 7H8v-2h8zm0-4h-2v-2h2zm0-3h-2V8h2zm3 3h-2v-2h2zm0-3h-2V8h2z"/></symbol>
+  <symbol id="i-mouse" viewBox="0 0 24 24"><path fill="currentColor" d="M11 1.07C7.05 1.56 4 4.92 4 9h7zm2 0V9h7c0-4.08-3.05-7.44-7-7.93M4 15c0 4.42 3.58 8 8 8s8-3.58 8-8v-4H4z"/></symbol>
+  <symbol id="i-light" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2A7 7 0 0 0 5 9c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7M9 21h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-tune" viewBox="0 0 24 24"><path fill="currentColor" d="M3 17v2h6v-2zM3 5v2h10V5zm10 16v-2h8v-2h-8v-2h-2v6zM7 9v2H3v2h4v2h2V9zm14 4v-2H11v2zm-6-4h2V7h4V5h-4V3h-2z"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path fill="currentColor" d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14c1.1 0 2-.9 2-2V7zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6m3-10H5V5h10z"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path fill="currentColor" d="M19 9h-4V3H9v6H5l7 7zM5 18v2h14v-2z"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path fill="currentColor" d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/></symbol>
+  <symbol id="i-plugin" viewBox="0 0 24 24"><path fill="currentColor" d="M20.5 11H19V7a1 1 0 0 0-1-1h-4V4.5a2.5 2.5 0 0 0-5 0V6H5a1 1 0 0 0-1 1v3.8h1.5a2.7 2.7 0 0 1 0 5.4H4V20a1 1 0 0 0 1 1h3.8v-1.5a2.7 2.7 0 0 1 5.4 0V21H18a1 1 0 0 0 1-1v-4h1.5a2.5 2.5 0 0 0 0-5"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><path fill="currentColor" d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2M6.4 14.6 5 13.2l2.8-2.8L5 7.6 6.4 6.2l4.2 4.2zm4.6 1.4v-2h8v2z"/></symbol>
+  <symbol id="i-reset" viewBox="0 0 24 24"><path fill="currentColor" d="M17.65 6.35A7.96 7.96 0 0 0 12 4a8 8 0 1 0 7.73 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4z"/></symbol>
+  <symbol id="i-usb" viewBox="0 0 24 24"><path fill="currentColor" d="M15 7v4h1v2h-3V5h2l-3-4-3 4h2v8H8v-2.07c.7-.37 1.2-1.08 1.2-1.93A2.2 2.2 0 0 0 7 6.8 2.2 2.2 0 0 0 4.8 9c0 .85.5 1.56 1.2 1.93V13a2 2 0 0 0 2 2h3v3.07c-.7.37-1.2 1.08-1.2 1.93a2.2 2.2 0 1 0 4.4 0c0-.85-.5-1.56-1.2-1.93V15h3a2 2 0 0 0 2-2v-2h1V7z"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path fill="currentColor" d="M12 21 1 8.5C4.4 5.6 8 4 12 4s7.6 1.6 11 4.5zM12 7c-2.9 0-5.5 1-7.8 2.7l2.4 2.7c1.5-1.2 3.4-1.9 5.4-1.9s3.9.7 5.4 1.9l2.4-2.7A12.2 12.2 0 0 0 12 7m0 6c-1.4 0-2.7.5-3.7 1.3L12 18.5l3.7-4.2c-1-.8-2.3-1.3-3.7-1.3"/></symbol>
+  <symbol id="i-bt" viewBox="0 0 24 24"><path fill="currentColor" d="M14.24 12.01l2.32 2.32a2.5 2.5 0 0 1-1.06-.94l-3.5 3.5V9.49l3.5 3.5c.27-.42.64-.76 1.06-.94l-2.32-2.32L17 7.15A2.5 2.5 0 0 1 18.5 4.5c-.66.28-1.22.79-1.5 1.5L12 11V2.21L5.61 8.61 10.79 13.8 5.61 19l6.39 6.4v-8.79l5 5c.28.71.84 1.22 1.5 1.5a2.5 2.5 0 0 1-1.5-2.65z"/></symbol>
+  <symbol id="i-sleep" viewBox="0 0 24 24"><path fill="currentColor" d="M12.34 2.02C6.59 1.82 2 6.42 2 12c0 5.52 4.48 10 10 10 5.58 0 10.18-4.59 9.98-10.34-.19-5.23-4.41-9.45-9.64-9.64M13 17.5H8v-2h3l-3.5-5V8h5v2h-3l3.5 5z"/></symbol>
+  <symbol id="i-sync" viewBox="0 0 24 24"><path fill="currentColor" d="M12 4V1L8 5l4 4V6a6 6 0 0 1 6 6c0 1.01-.25 1.97-.7 2.8l1.46 1.46A7.93 7.93 0 0 0 20 12a8 8 0 0 0-8-8m0 14a6 6 0 0 1-6-6c0-1.01.25-1.97.7-2.8L5.24 7.74A7.93 7.93 0 0 0 4 12a8 8 0 0 0 8 8v3l4-4-4-4z"/></symbol>
+  <symbol id="i-layer" viewBox="0 0 24 24"><path fill="currentColor" d="m11.99 18.54-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path fill="currentColor" d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></symbol>
+  <symbol id="i-macro" viewBox="0 0 24 24"><path fill="currentColor" d="M15 7.5V2H9v5.5l3 3 3-3M7.5 9H2v6h5.5l3-3zM9 14.5V20h6v-5.5l-3-3zM16.5 9l-3 3 3 3H22V9zM12 24c4.42 0 8-3.58 8-8h-2a6 6 0 0 1-12 0H4c0 4.42 3.58 8 8 8"/></symbol>
+</svg>
 
-  <!-- 键盘工作台 -->
-  <section id="kbView" class="hidden">
+<div class="appbar">
+  <div class="brand">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 2 7v10l10 5 10-5V7zm0 2.2 6.8 3.4L12 11 5.2 7.6zM5 9.4l6 3v7.4l-6-3zm14 7.4-6 3v-7.4l6-3z"/></svg>
+    <span>GANSS Device Hub</span>
+  </div>
+  <div class="devbar" id="devbar"></div>
+  <div class="spacer"></div>
+  <button class="iconbtn" id="btnPresets" title="配置模板库"><svg><use href="#i-layer"/></svg></button>
+  <button class="iconbtn" id="btnExport" title="导出配置"><svg><use href="#i-download"/></svg></button>
+  <button class="iconbtn" id="btnImport" title="导入配置"><svg><use href="#i-upload"/></svg></button>
+  <button class="iconbtn" id="btnLogs" title="通信日志"><svg><use href="#i-terminal"/></svg></button>
+  <button class="iconbtn" id="btnPlugins" title="插件管理"><svg><use href="#i-plugin"/></svg></button>
+</div>
+<main>
+  <div id="sleepbar" class="sleepbar">
+    <svg><use href="#i-sleep"/></svg>
+    <span>设备休眠中，按任意键 / 移动鼠标唤醒后即可同步</span>
+    <button class="m3" onclick="syncPending()">唤醒并同步</button>
+  </div>
+
+  <!-- keyboard workspace -->
+  <section id="kbView">
     <div class="card">
-      <h2>
-        <div class="layer-switch">
-          <button id="layerNormal" class="active" onclick="setLayer('normal')">普通层</button>
-          <button id="layerFn" onclick="setLayer('fn')">Fn 层</button>
+      <h2><svg><use href="#i-layer"/></svg>按键映射
+        <span style="flex:1"></span>
+        <div class="seg" style="margin-right:10px">
+          <button id="layNormal" class="active" onclick="setLayer('normal')">普通层</button>
+          <button id="layFn" onclick="setLayer('fn')">Fn 层</button>
         </div>
-        <span class="badge" id="modifiedCount"></span>
+        <button class="m3" onclick="applyFullLayer()">整层下发</button>
+        <button class="m3" onclick="restoreLayer()">恢复全层默认</button>
       </h2>
       <div id="kb"></div>
     </div>
     <div class="grid2">
-      <div class="card panel">
-        <h2>键位配置 <span class="badge" id="selKeyName">未选择</span></h2>
-        <label>映射类型</label>
-        <select id="mapType" onchange="renderTypeUI()">
+      <div class="card">
+        <h2>选中键位 <span class="pill ro" id="selName">未选择</span></h2>
+        <label class="f">映射类型</label>
+        <select class="f" id="mapType" onchange="renderTypeUI()">
           <option value="default">默认（恢复出厂）</option>
           <option value="key">按键 / 组合键</option>
           <option value="media">多媒体键</option>
-          <option value="macro">宏绑定</option>
+          <option value="disabled">禁用按键</option>
+          <option value="macro">宏绑定（槽位）</option>
         </select>
         <div id="uiKey">
-          <label>组合键（如 LCtrl+C）</label>
-          <input id="comboKey" placeholder="LCtrl+C" list="usageList">
+          <label class="f">目标键 / 组合键（如 LCtrl+C）</label>
+          <input class="f" id="comboKey" placeholder="LCtrl+C" list="usageList">
           <div class="mods" id="modifierBoxes"></div>
         </div>
         <div id="uiMedia" class="hidden">
-          <label>多媒体键（Consumer Page LE，旧通道已实测 ACK）</label>
-          <select id="mediaKey"></select>
+          <label class="f">多媒体键（Consumer Page LE）</label>
+          <select class="f" id="mediaKey"></select>
         </div>
         <div id="uiMacro" class="hidden">
-          <label>宏槽位 (0-99)</label>
-          <input id="macroSlot" type="number" min="0" max="99" value="0">
+          <label class="f">宏槽位（0-99）</label>
+          <input class="f" id="macroSlot" type="number" min="0" max="99" value="0">
         </div>
         <div class="btnrow">
-          <button class="primary" onclick="applyMap()">下发映射</button>
-          <button onclick="applyDefault()">恢复默认</button>
+          <button class="m3 primary" onclick="applyMap()">下发映射</button>
+          <button class="m3" onclick="applyDefault()">恢复该键默认</button>
         </div>
+        <div id="status"></div>
       </div>
       <div>
         <div class="card">
           <h2>配置文件</h2>
           <div id="profiles"></div>
-          <div style="display:flex;gap:8px;margin-top:8px">
-            <input id="profileName" placeholder="新配置名" style="flex:1">
-            <button onclick="saveProfile()">保存当前</button>
-          </div>
-          <div class="btnrow">
-            <button onclick="exportProfiles()">导出 JSON</button>
-            <label style="position:relative;overflow:hidden">
-              <input type="file" id="importFile" accept=".json" style="position:absolute;inset:0;opacity:0;cursor:pointer" onchange="importProfiles(event)">
-              <button>导入 JSON</button>
-            </label>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <input class="f" id="profileName" placeholder="新配置名" style="flex:1">
+            <button class="m3" onclick="saveProfile()">保存当前</button>
           </div>
         </div>
         <div class="card">
           <h2>设备状态</h2>
-          <div id="kbStateInfo" class="device-info">—</div>
-          <div class="btnrow"><button class="primary" onclick="kbLighting()">测试灯光</button></div>
+          <div id="kbStateInfo" class="device-info" style="font-size:12px;color:var(--g-sub);line-height:1.7">—</div>
+          <div class="btnrow"><button class="m3 primary" onclick="kbLighting()">测试灯光</button></div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- 鼠标工作台 -->
+  <!-- mouse workspace -->
   <section id="msView" class="hidden">
+    <div class="sleepbar" id="msWhidHint" style="display:flex;background:var(--g-blue-bg);color:var(--g-blue-ink)">
+      <svg><use href="#i-usb"/></svg>
+      <span>FLX3 需要浏览器直连通道（与官方驱动同款传输层）。点击右侧按钮授权一次，授权将持久化。</span>
+      <button class="m3 primary" id="btnWhidConnect" onclick="whidConnect()">授权浏览器直连</button>
+      <span id="whidState"></span>
+    </div>
     <div class="card">
       <div class="tabs">
         <button class="active" onclick="msTab(this,'msKeys')">按键设置</button>
@@ -157,17 +254,16 @@ button:disabled{opacity:.5;cursor:not-allowed}
         <button onclick="msTab(this,'msPerf')">性能设置</button>
         <button onclick="msTab(this,'msOther')">其他设置</button>
       </div>
-
       <div id="msKeys" class="grid2">
-        <div class="card">
-          <h2>按键绑定 <span class="badge" id="msSelName">点击鼠标图选键</span></h2>
+        <div class="card" style="margin:0">
+          <h2>按键绑定 <span class="pill ro" id="msSelName">点击鼠标图选键</span></h2>
           <div class="mouseview" id="mouseSvg"></div>
-          <div id="msButtonList" style="margin-top:10px"></div>
+          <div id="msButtonList"></div>
         </div>
-        <div class="card panel">
-          <h2>动作绑定 <span class="badge" id="msCurBtn">—</span></h2>
-          <label>类型</label>
-          <select id="msType" onchange="msRenderType()">
+        <div class="card" style="margin:0">
+          <h2>动作绑定 <span class="pill ro" id="msCurBtn">—</span></h2>
+          <label class="f">类型</label>
+          <select class="f" id="msType" onchange="msRenderType()">
             <option value="default">默认</option>
             <option value="mouse">鼠标键</option>
             <option value="combo">键盘组合键</option>
@@ -176,42 +272,41 @@ button:disabled{opacity:.5;cursor:not-allowed}
             <option value="dpi">DPI 功能</option>
             <option value="disable">禁用</option>
           </select>
-          <div id="msUiMouse" class="hidden"><label>鼠标键</label>
-            <select id="msMouseBtn"><option value="mouse:左键">左键</option><option value="mouse:右键">右键</option><option value="mouse:中键">中键</option><option value="mouse:前进">前进</option><option value="mouse:后退">后退</option></select></div>
-          <div id="msUiCombo" class="hidden"><label>组合键</label><input id="msCombo" placeholder="LCtrl+C"></div>
-          <div id="msUiMedia" class="hidden"><label>多媒体键</label><select id="msMedia"></select></div>
-          <div id="msUiFire" class="hidden"><label>间隔 ms / 次数(0=按住连发)</label>
-            <input id="msFireInt" type="number" value="50"><input id="msFireCnt" type="number" value="3"></div>
-          <div id="msUiDpi" class="hidden"><label>DPI 功能</label>
-            <select id="msDpiFn"><option value="dpi_cycle">DPI 循环</option><option value="dpi_up">DPI +</option><option value="dpi_down">DPI -</option></select></div>
-          <div class="btnrow"><button class="primary" onclick="msApply()">下发按键</button></div>
+          <div id="msUiMouse" class="hidden"><label class="f">鼠标键</label>
+            <select class="f" id="msMouseBtn"><option value="mouse:左键">左键</option><option value="mouse:右键">右键</option><option value="mouse:中键">中键</option><option value="mouse:前进">前进</option><option value="mouse:后退">后退</option></select></div>
+          <div id="msUiCombo" class="hidden"><label class="f">组合键</label><input class="f" id="msCombo" placeholder="LCtrl+C"></div>
+          <div id="msUiMedia" class="hidden"><label class="f">多媒体键</label><select class="f" id="msMedia"></select></div>
+          <div id="msUiFire" class="hidden"><label class="f">间隔 ms / 次数（0=按住连发）</label>
+            <div style="display:flex;gap:8px"><input class="f" id="msFireInt" type="number" value="50"><input class="f" id="msFireCnt" type="number" value="3"></div></div>
+          <div id="msUiDpi" class="hidden"><label class="f">DPI 功能</label>
+            <select class="f" id="msDpiFn"><option value="dpi_cycle">DPI 循环</option><option value="dpi_up">DPI +</option><option value="dpi_down">DPI -</option></select></div>
+          <div class="btnrow"><button class="m3 primary" onclick="msApply()">下发按键</button></div>
+          <div id="msStatus"></div>
         </div>
       </div>
-
       <div id="msDpi" class="hidden">
-        <div class="card">
-          <h2>DPI 档位 <span class="badge" id="msSensorBadge">PAW3395</span></h2>
+        <div class="card" style="margin:0">
+          <h2>DPI 档位 <span class="pill ro" id="msSensorBadge">PAW3395</span></h2>
           <div id="dpiStages"></div>
           <div class="switch-row">
             <label><input type="checkbox" id="dpiXY"> X/Y 独立设置</label>
-            <button class="primary" onclick="msApplyDpi()">下发 DPI</button>
-            <button onclick="msApplyDpiColor()">下发档位颜色</button>
+            <button class="m3 primary" onclick="msApplyDpi()">下发 DPI</button>
+            <button class="m3" onclick="msApplyDpiColor()">下发档位颜色</button>
           </div>
         </div>
       </div>
-
       <div id="msPerf" class="hidden">
-        <div class="card">
+        <div class="card" style="margin:0">
           <h2>性能</h2>
-          <label>回报率</label>
-          <div class="radio-group" id="msRateGroup"></div>
-          <label style="margin-top:10px">LOD 静默高度</label>
-          <div class="radio-group">
-            <label><input type="radio" name="lod" value="1" checked>1mm</label>
-            <label><input type="radio" name="lod" value="2">2mm</label>
+          <label class="f">回报率</label>
+          <div class="radio-group" id="msRateGroup" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+          <label class="f" style="margin-top:12px">LOD 静默高度</label>
+          <div style="display:flex;gap:8px">
+            <label class="pill ro"><input type="radio" name="lod" value="1" checked>1mm</label>
+            <label class="pill ro"><input type="radio" name="lod" value="2">2mm</label>
           </div>
-          <label style="margin-top:10px">休眠时间: <span id="sleepVal">5</span> 分钟</label>
-          <input type="range" id="msSleep" min="1" max="15" value="5" oninput="sleepVal.textContent=this.value">
+          <label class="f" style="margin-top:12px">休眠时间: <b id="sleepVal">5</b> 分钟</label>
+          <input type="range" id="msSleep" min="1" max="15" value="5" oninput="sleepVal.textContent=this.value" style="width:100%">
           <div class="switch-row">
             <label><input type="checkbox" id="msAngle"> 直线修正</label>
             <label><input type="checkbox" id="msMotion" checked> Motion Sync</label>
@@ -219,274 +314,51 @@ button:disabled{opacity:.5;cursor:not-allowed}
             <label><input type="checkbox" id="msWakeup" checked> 移动唤醒</label>
           </div>
           <div class="btnrow">
-            <button class="primary" onclick="msApplyPerf()">下发性能</button>
-            <button onclick="msApplyPower()">下发电源</button>
+            <button class="m3 primary" onclick="msApplyPerf()">下发性能</button>
+            <button class="m3" onclick="msApplyPower()">下发电源</button>
           </div>
         </div>
       </div>
-
       <div id="msOther" class="hidden">
-        <div class="card">
+        <div class="card" style="margin:0">
           <h2>灯光</h2>
-          <div class="row" style="display:flex;gap:10px">
-            <select id="msLightMode" style="flex:1"></select>
-            <input type="color" id="msLightColor" value="#409eff" style="width:50px;height:34px;padding:2px">
-            <input type="number" id="msLightBri" min="1" max="4" value="4" style="width:60px" title="亮度1-4">
-            <input type="number" id="msLightSpd" min="1" max="3" value="3" style="width:60px" title="速度1-3">
-            <button class="primary" onclick="msApplyLight()">应用</button>
+          <div style="display:flex;gap:10px">
+            <select class="f" id="msLightMode" style="flex:1"></select>
+            <input type="color" id="msLightColor" value="#409eff" style="width:50px;height:36px;padding:2px">
+            <input class="f" type="number" id="msLightBri" min="1" max="4" value="4" style="width:60px" title="亮度 1-4">
+            <input class="f" type="number" id="msLightSpd" min="1" max="3" value="3" style="width:60px" title="速度 1-3">
+            <button class="m3 primary" onclick="msApplyLight()">应用</button>
           </div>
         </div>
         <div class="card">
           <h2>维护</h2>
           <div class="btnrow">
-            <button onclick="msFactoryReset()" style="color:var(--err)">一键恢复出厂（含宏擦除）</button>
+            <button class="m3" onclick="msFactoryReset()" style="color:var(--g-red)">恢复出厂设置</button>
           </div>
-          <div id="msStateInfo" class="device-info" style="margin-top:10px"></div>
+          <div id="msStateInfo" class="device-info" style="font-size:12px;color:var(--g-sub);margin-top:10px"></div>
         </div>
       </div>
     </div>
   </section>
-
-  <div id="status"></div>
 </main>
+
+<!-- drawers & menus -->
+<div class="drawer-mask" id="drawerMask" onclick="closeDrawers()"></div>
+<div class="drawer" id="pluginDrawer">
+  <h3>插件管理 <button class="iconbtn" onclick="closeDrawers()"><svg><use href="#i-close"/></svg></button></h3>
+  <div id="pluginList"></div>
+</div>
+<div class="drawer" id="logDrawer">
+  <h3>通信日志 <button class="iconbtn" onclick="closeDrawers()"><svg><use href="#i-close"/></svg></button></h3>
+  <pre class="mono" id="commLog">（空）</pre>
+</div>
+<div class="menu" id="presetMenu">
+  <div class="mi" onclick="applyPreset('mac')"><svg><use href="#i-kb"/></svg>macOS 配列模式（Win/Alt 互换）</div>
+  <div class="mi" onclick="applyPreset('game')"><svg><use href="#i-tune"/></svg>电竞游戏模式（禁用 LWin）</div>
+  <div class="mi" onclick="applyPreset('win')"><svg><use href="#i-reset"/></svg>标准 Windows 默认模式</div>
+</div>
 <datalist id="usageList"></datalist>
-<script>
-const $=i=>document.getElementById(i);
-let devices=[],curDev=null,layer='normal',keys=[],modified={normal:{},fn:{}},curKey=null,
-    mediaKeys=[],msButtons={},msSelBtn=null;
-function status(k,t){const s=$('status');s.className=k;s.textContent=t}
-async function api(m,p={}){const r=await fetch('/api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_version:2,id:String(Date.now()),method:m,params:p})});return r.json()}
-const MOCK=()=>devices.some(d=>d.mock);
-
-async function scan(){
-  const r=await api('devices.scan');if(!r.ok)return status('err',r.error.message);
-  devices=r.result.devices;
-  renderDevbar();
-  if(!curDev&&devices.length)switchDev(devices[0].device_id);
-}
-function renderDevbar(){
-  $('devbar').innerHTML=devices.map(d=>{
-    const online=!d.sleeping&&d.online!==false;
-    const bat=d.battery!=null?`<span class="badge battery">🔋${d.battery}%</span>`:'';
-    const conn=d.connection==='wireless'?'2.4G':d.connection==='wired'?'USB':d.connection;
-    return `<div class="devtab${curDev===d.device_id?' active':''}" onclick="switchDev('${d.device_id}')">
-      <span class="dot${online?'':' sleep'}"></span>
-      <div><div class="nm">${d.name}</div><div class="st">${d.device_type} · ${conn} · ${d.plugin_id}</div></div>
-      ${bat}</div>`}).join('');
-  const anySleep=devices.some(d=>d.sleeping);
-  $('sleepbar').classList.toggle('show',anySleep);
-}
-async function switchDev(id){
-  curDev=id;
-  const d=devices.find(x=>x.device_id===id);
-  renderDevbar();
-  if(d.device_type==='keyboard'){ $('kbView').classList.remove('hidden');$('msView').classList.add('hidden');initKb(d); }
-  else { $('msView').classList.remove('hidden');$('kbView').classList.add('hidden');initMouse(d); }
-}
-// ---- keyboard ----
-let kbInited=false;
-async function initKb(d){
-  const st=await api('device.state',{device:d.device_id});
-  if(st.ok){const s=st.result.state;
-    if(s.shadow)modified=s.shadow.keymap||{normal:{},fn:{}};
-    $('kbStateInfo').innerHTML=`连接: ${s.connection} · 回读: ${s.readback==='hardware'?'硬件':'无'}`+
-      (s.note?`<br>ℹ ${s.note}`:'');
-    $('sleepbar').classList.toggle('show', s.sleeping===true);
-  }
-  if(kbInited)return; kbInited=true;
-  const k=await api('keys.list',{device:d.device_id});
-  if(k.ok){keys=k.result.keys;mediaKeys=k.result.media_keys||[];
-    $('mediaKey').innerHTML=mediaKeys.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
-    buildCanvas();buildUsageList();buildModifiers();}
-  refreshProfiles();
-}
-function buildCanvas(){
-  if(!keys.length)return;
-  const maxX=Math.max(...keys.map(k=>k.rect[0]+k.rect[2]));
-  const maxY=Math.max(...keys.map(k=>k.rect[1]+k.rect[3]));
-  const sc=1.9,W=(maxX+10)*sc,H=(maxY+10)*sc;
-  let svg=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
-  for(const k of keys){const[x,y,w,h]=k.rect;
-    svg+=`<g><rect class="keyrect" data-idx="${k.index}" x="${(x+5)*sc}" y="${(y+5)*sc}" width="${w*sc}" height="${h*sc}" rx="4"/>
-    <text class="keylabel" x="${(x+5)*sc+w*sc/2}" y="${(y+5)*sc+h*sc/2+3}" text-anchor="middle">${k.name}</text>
-    <text class="keymap-badge" data-badge="${k.index}" x="${(x+5)*sc+w*sc-2}" y="${(y+5)*sc+10}" text-anchor="end"></text></g>`}
-  $('kb').innerHTML=svg+'</svg>';
-  $('kb').addEventListener('click',e=>{const r=e.target.closest('.keyrect');if(r)selectKey(+r.dataset.idx)});
-  refreshBadges();
-}
-function keyByIndex(i){return keys.find(k=>k.index===i)}
-function selectKey(i){curKey=i;
-  document.querySelectorAll('.keyrect').forEach(r=>r.classList.toggle('selected',+r.dataset.idx===i));
-  const k=keyByIndex(i);$('selKeyName').textContent=`${k.name} (#${i})`;
-  if(k.name==='Fn')status('info','Fn 为系统保留键，禁止修改（防自锁）');
-  const cur=modified[layer][k.name];renderTypeUI();
-  if(cur){if(cur.startsWith('media:')){$('mapType').value='media';$('mediaKey').value=cur}
-    else if(cur.startsWith('macro:')){$('mapType').value='macro';$('macroSlot').value=cur.slice(6)}
-    else if(cur!=='default'){$('mapType').value='key';$('comboKey').value=cur}
-    else $('mapType').value='default'}else $('mapType').value='default';
-}
-function setLayer(l){layer=l;$('layerNormal').classList.toggle('active',l==='normal');
-  $('layerFn').classList.toggle('active',l==='fn');refreshBadges()}
-function refreshBadges(){const m=modified[layer]||{};let n=0;
-  document.querySelectorAll('.keyrect').forEach(r=>{const k=keyByIndex(+r.dataset.idx);
-    const isMod=m[k.name]&&m[k.name]!=='default';
-    r.classList.toggle('modified',!!isMod);r.classList.toggle('reserved',k.name==='Fn');
-    if(isMod)n++;
-    const b=document.querySelector(`[data-badge="${k.index}"]`);
-    if(b)b.textContent=isMod?(m[k.name]==='default'?'⌂':m[k.name].replace('media:','').slice(0,5)):'  '});
-  $('modifiedCount').textContent=`已改 ${n} 键`}
-function buildUsageList(){const c=[['A',4],['B',5],['C',6],['V',25],['X',27],['Q',20],['W',26],['Esc',41],['Space',44],['Enter',40],['Tab',43]];
-  $('usageList').innerHTML=c.map(([n,u])=>`<option value="${n}">`).join('')}
-function buildModifiers(){const m=['LCtrl','LShift','LAlt','LWin','RCtrl','RShift','RAlt','RWin'];
-  $('modifierBoxes').innerHTML=m.map(x=>`<label><input type="checkbox" data-mod="${x}">${x}</label>`).join('')}
-function renderTypeUI(){const t=$('mapType').value;
-  $('uiKey').classList.toggle('hidden',t!=='key');
-  $('uiMedia').classList.toggle('hidden',t!=='media');
-  $('uiMacro').classList.toggle('hidden',t!=='macro')}
-function comboFromUI(){const m=[...document.querySelectorAll('[data-mod]:checked')].map(c=>c.dataset.mod);
-  const k=$('comboKey').value.trim();return k?[...m,k].join('+'):null}
-async function applyMap(){if(curKey==null)return status('err','先选择按键');
-  const k=keyByIndex(curKey);if(k.name==='Fn')return status('err','Fn 保留键');
-  const t=$('mapType').value;let target='default';
-  if(t==='key'){target=comboFromUI();if(!target)return status('err','填目标键')}
-  if(t==='media')target=$('mediaKey').value;
-  if(t==='macro')target=`macro:${$('macroSlot').value}`;
-  const r=await api('device.apply',{device:curDev,module:'keymap',patch:{source:k.name,target,layer}});
-  if(r.ok){modified[layer][k.name]=target;refreshBadges();
-    status('ok',`${k.name} → ${target} 已下发`+(r.result.apply.note?'\n'+r.result.apply.note:''))}
-  else status('err',r.error.message)}
-async function applyDefault(){if(curKey==null)return status('err','先选择按键');
-  const k=keyByIndex(curKey);if(k.name==='Fn')return status('err','Fn 保留键');
-  const r=await api('device.apply',{device:curDev,module:'keymap',patch:{source:k.name,target:'default',layer}});
-  if(r.ok){modified[layer][k.name]='default';refreshBadges();status('ok',`${k.name} 已恢复默认`)}
-  else status('err',r.error.message)}
-async function kbLighting(){const r=await api('device.apply',{device:curDev,module:'lighting',
-  patch:{mode:1,color:'FF6A00',brightness:4,speed:3}});
-  status(r.ok?'ok':'err',r.ok?'灯光已切换':r.error.message)}
-
-// profiles
-async function refreshProfiles(){const r=await api('profiles.list',{device:curDev});
-  if(r.ok){const ps=r.result.profiles;
-    $('profiles').innerHTML=ps.length?ps.map(p=>`<div class="profile-item"><span>${p.name}</span>
-      <span><button onclick="delProfile('${p.name}')">×</button></span></div>`).join(''):'<span class="badge">暂无</span>'}}
-async function saveProfile(){const n=$('profileName').value.trim();if(!n)return status('err','填配置名');
-  const r=await api('profiles.save',{device:curDev,name:n,data:{keymap:JSON.parse(JSON.stringify(modified))}});
-  if(r.ok){status('ok','已保存 '+n);$('profileName').value='';refreshProfiles()}else status('err',r.error.message)}
-async function delProfile(n){await api('profiles.delete',{device:curDev,name:n});refreshProfiles()}
-async function exportProfiles(){const r=await api('profiles.export',{device:curDev});
-  if(r.ok){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(r.result.export,null,2)],{type:'application/json'}));
-    a.download='ganss-profiles.json';a.click()}}
-async function importProfiles(ev){const f=ev.target.files[0];if(!f)return;
-  const r=await api('profiles.import',{device:curDev,data:JSON.parse(await f.text())});
-  if(r.ok){status('ok',`导入 ${r.result.result.imported} 个`);refreshProfiles()}else status('err',r.error.message)}
-async function syncPending(){status('info','请唤醒设备后点击各映射键重新下发');scan()}
-
-// ---- mouse ----
-let msInited=false,msState={sensorType:149,maxReportRate:2};
-const BTN_POS={1:[95,55,'左键'],2:[175,55,'右键'],3:[135,95,'中键'],6:[135,150,'DPI'],4:[62,125,'前进'],5:[62,165,'后退']};
-async function initMouse(d){
-  const st=await api('device.state',{device:d.device_id});
-  if(st.ok){const s=st.result.state;msState={sensorType:s.sensorType||149,maxReportRate:s.maxReportRate||2};
-    $('msStateInfo').innerHTML=`电量: ${s.battery??'?}% · 传感器: ${s.sensorType} · ${s.mock?'虚拟设备':''}`;
-    $('sleepbar').classList.toggle('show', s.sleeping===true);}
-  if(msInited)return;msInited=true;
-  // mouse svg
-  let svg=`<svg width="280" height="260" viewBox="0 0 280 260">
-    <ellipse cx="140" cy="130" rx="80" ry="115" fill="#2a2d31" stroke="#444"/>
-    <line x1="140" y1="30" x2="140" y2="115" stroke="#555"/>
-    <rect x="128" y="100" width="24" height="28" rx="8" fill="#3a3d41"/>`;
-  for(const[b,[x,y,nm]]of Object.entries(BTN_POS))
-    svg+=`<g class="mousebtn" data-btn="${b}" onclick="msSelectBtn(${b})">
-      <circle cx="${x}" cy="${y}" r="16" fill="#ff6a00" opacity="0.9"/>
-      <text x="${x}" y="${y+4}" text-anchor="middle" fill="#fff" font-size="13" font-weight="700">${b}</text></g>`;
-  $('mouseSvg').innerHTML=svg+'</svg>';
-  $('msLightMode').innerHTML=Object.entries({0:'关闭',1:'混彩流光',2:'呼吸',3:'常亮',4:'霓虹',5:'跑马',6:'混彩常亮',7:'七彩波浪'}).map(([v,n])=>`<option value="${v}">${n}</option>`).join('');
-  $('msMedia').innerHTML=['播放暂停','播放停止','上一曲','下一曲','音量+','音量-','静音','计算器','多媒体','主页','刷新','前进','后退','收藏','搜索'].map(n=>`<option value="media:${n}">${n}</option>`).join('');
-  const rates={8:'125Hz',4:'250Hz',2:'500Hz',1:'1000Hz',17:'2000Hz'};
-  $('msRateGroup').innerHTML=Object.entries(rates).map(([v,n])=>`<label><input type="radio" name="rate" value="${v}"${v==='1'?' checked':''}>${n}</label>`).join('');
-  renderDpiStages();
-  msRenderButtons();
-}
-function msRenderButtons(){const labels={1:'左键',2:'右键',3:'中键',4:'前进',5:'后退',6:'DPI循环'};
-  $('msButtonList').innerHTML=Object.entries(labels).map(([b,n])=>{
-    const v=msButtons[b];const tag=v?(v.startsWith('media:')?v.slice(6):v.replace('mouse:','').replace('dpi_','DPI')):'默认';
-    return `<div class="profile-item" data-btn="${b}" onclick="msSelectBtn(${b})" style="${msSelBtn==b?'border-color:var(--accent)':''}">
-      <span>${b} · ${n}</span><span class="badge">${tag}</span></div>`}).join('')}
-function msSelectBtn(b){msSelBtn=b;
-  document.querySelectorAll('.mousebtn').forEach(g=>g.classList.toggle('active',+g.dataset.btn===b));
-  $('msCurBtn').textContent=`按键 ${b}`;
-  const cur=msButtons[b];msRenderType();
-  if(cur){if(cur.startsWith('media:')){$('msType').value='media';$('msMedia').value=cur}
-    else if(cur.startsWith('mouse:')){$('msType').value='mouse';$('msMouseBtn').value=cur}
-    else if(cur.startsWith('dpi_')){$('msType').value='dpi';$('msDpiFn').value=cur}
-    else if(cur.startsWith('fire:')){$('msType').value='fire'}
-    else if(cur==='disable'){$('msType').value='disable'}
-    else{$('msType').value='combo';$('msCombo').value=cur}}
-  else $('msType').value='default';
-  msRenderButtons()}
-function msRenderType(){const t=$('msType').value;
-  for(const[id,show]of[['msUiMouse','mouse'],['msUiCombo','combo'],['msUiMedia','media'],['msUiFire','fire'],['msUiDpi','dpi']])
-    $(id).classList.toggle('hidden',t!==show)}
-function msSpecFromUI(){const t=$('msType').value;
-  if(t==='default')return null;if(t==='disable')return'disable';
-  if(t==='mouse')return $('msMouseBtn').value;if(t==='media')return $('msMedia').value;
-  if(t==='fire')return`fire:${$('msFireInt').value}:${$('msFireCnt').value}`;
-  if(t==='dpi')return $('msDpiFn').value;
-  return $('msCombo').value.trim()||null}
-async function msApply(){if(!msSelBtn)return status('err','先选按键');
-  msButtons[msSelBtn]=msSpecFromUI();
-  const r=await api('device.apply',{device:curDev,module:'keymap',patch:{buttons:msButtons}});
-  status(r.ok?'ok':'err',r.ok?`按键 ${msSelBtn} 已下发（ACK）`:r.error.message);
-  msRenderButtons()}
-function renderDpiStages(){
-  const sensor=msState.sensorType,step=sensor===149||sensor===80?50:100;
-  const max={17:12000,149:26000,80:30000,32:8000,18:4800,9:6000,6:12800,112:30000}[sensor]||26000;
-  $('msSensorBadge').textContent=`sensor ${sensor} · 步进${step} · 上限${max}`;
-  const defaults=[400,800,1600,3200,6400];
-  $('dpiStages').innerHTML=Array.from({length:6},(_,i)=>{
-    const v=defaults[i]||Math.min(defaults[i-1]*2,max);
-    return `<div class="dpi-stage"><div class="row">
-      <b>档${i+1}</b>
-      <input type="range" min="100" max="${max}" step="${step}" value="${v}" oninput="this.nextElementSibling.value=this.value">
-      <input type="number" value="${v}" style="width:90px" onchange="this.previousElementSibling.value=this.value">
-      <input type="color" value="${['#ff0000','#0066ff','#32aa70','#f59c25','#00dde4','#b500ec'][i]}" style="width:36px;height:28px;padding:2px">
-    </div></div>`}).join('')}
-async function msApplyDpi(){
-  const stages=[...document.querySelectorAll('#dpiStages input[type=number]')].map(i=>+i.value);
-  const mask=(1<<stages.length)-1;
-  const r=await api('device.apply',{device:curDev,module:'dpi',patch:{
-    axis:'x',currentLevel:2,enabledMask:mask,dpiValues:stages,sensorType:msState.sensorType}});
-  status(r.ok?'ok':'err',r.ok?'DPI 已下发（ACK）：'+(r.result.apply.note||''):r.error.message)}
-async function msApplyDpiColor(){
-  const colors=[...document.querySelectorAll('#dpiStages input[type=color]')].map(i=>i.value);
-  const r=await api('device.apply',{device:curDev,module:'dpi_color',patch:{colors}});
-  status(r.ok?'ok':'err',r.ok?'档位颜色已下发':r.error.message)}
-async function msApplyPerf(){
-  const rate=+document.querySelector('input[name=rate]:checked').value;
-  const lod=+document.querySelector('input[name=lod]:checked').value;
-  const r=await api('device.apply',{device:curDev,module:'polling',patch:{rate}});
-  const r2=await api('device.apply',{device:curDev,module:'lod',patch:{lod}});
-  const r3=await api('device.apply',{device:curDev,module:'sensor',patch:{
-    angleSnap:$('msAngle').checked,motionSync:$('msMotion').checked,rippleControl:$('msRipple').checked}});
-  status(r.ok&&r2.ok&&r3.ok?'ok':'err',`回报率 ${ {8:'125Hz',4:'250Hz',2:'500Hz',1:'1000Hz',17:'2000Hz'}[rate]} · LOD ${lod}mm 已下发`)}
-async function msApplyPower(){
-  const r=await api('device.apply',{device:curDev,module:'power',patch:{
-    sleepTime:+$('msSleep').value,moveWakeup:$('msWakeup').checked,moveLighting:false}});
-  status(r.ok?'ok':'err',r.ok?'电源设置已下发':r.error.message)}
-async function msApplyLight(){
-  const r=await api('device.apply',{device:curDev,module:'lighting',patch:{
-    mode:+$('msLightMode').value,color:$('msLightColor').value,
-    brightness:+$('msLightBri').value,speed:+$('msLightSpd').value}});
-  status(r.ok?'ok':'err',r.ok?'灯光已下发':r.error.message)}
-async function msFactoryReset(){
-  if(!confirm('确认恢复出厂设置？将擦除所有按键映射、DPI 与宏。'))return;
-  const r=await api('device.apply',{device:curDev,module:'factory_reset',patch:{}});
-  status(r.ok?'ok':'err',r.ok?'已恢复出厂':r.error.message)}
-function msTab(btn,id){document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  for(const v of['msKeys','msDpi','msPerf','msOther'])$(v).classList.toggle('hidden',v!==id)}
-function toggleMock(){status('info','虚拟预览由环境变量 GANSS_FLX3_MOCK=1 控制，重启后端生效')}
-scan();
-</script>
+<input type="file" id="importFile" accept=".json" style="display:none" onchange="importProfiles(event)">
+<script src="app.js"></script>
 </body>
 </html>
