@@ -26,7 +26,7 @@ FLX3 使用**标准 Feature Report + Report ID** 模型（键盘是无 Report ID
 - **主动上报（异步 Input）**：`oninputreport`，**reportId=4**，8 字节状态包（见 §3）
 - 每条命令有 **commandSeq 序号**（`(seq+1)%256`，初始 1），放在 data[1]
 
-### 校验和（前端函数 `setCheckSum`，逐字还原）
+### 校验和（前端函数 `setCheckSum`，逐字还原 + index3 语义已核实）
 
 ```js
 function setCheckSum(data) {
@@ -36,13 +36,34 @@ function setCheckSum(data) {
   data.splice(3, 0, sum);                                // 校验和插入 index 3
 }
 ```
-即：命令数组原为 `[cmd, seq, subcmd, payload...]`，发送前把「6 + 除 index3 外全部字节之和 & 0xFF」
-插入到 index 3，最终 **31 字节**（不足补 0 或 0xFF，取决于命令；宏块补 0，其余补 255）。
+
+**核实结论（阶段 1 复核）**：
+1. `splice(3,0,sum)` 会使数组从 31 字节**变为 32 字节**。WebHID `sendFeatureReport(6, data)`
+   的 data 不含 Report ID，所以完整 feature 报文 = reportId 6（hidapi 下为 buf[0]）+ 32 字节数据。
+2. **index 3 在累加前保存的是"挤开位"**：`setCheckSum` 跳过 i=3 的原值不累加，然后把校验和插到
+   index 3，原 index 3 的业务字节顺移到 index 4。即：
+   - 逻辑数组 `[cmd, seq, subcmd, X, payload...]`（X 为原 index3）
+   - 发送数组 `[cmd, seq, subcmd, SUM, X, payload...]`（X 不参与累加！）
+3. **各命令的 X（原 index3）语义**：
+   - cmd=1 按键：X=首条按键记录 type（16）→ **首条记录的 type 不参与校验和**（前端故意如此或 bug，照抄）
+   - cmd=2 DPI：X=轴代码（2/18）
+   - cmd=3 DPI 颜色：X=首档 R 值
+   - cmd=4 回报率：X=rate 值
+   - cmd=5 LOD：X=lod 值
+   - cmd=6 灯光：X=显式占位 255
+   - cmd=7 电源：X=sleepTime
+   - cmd=8 Sensor：X=angleSnap
+   - cmd=15 出厂恢复：X=显式 255
+   - cmd=17 宏擦除：X=显式 255
+   - cmd=16 宏块：X=包号/包数打包字节
+4. 因此**黄金样本必须按"逻辑数组 + setCheckSum 仿真"生成**，不能手写。
 
 ### 命令重试模型
 
 `sendCommand(reportId=6, data)`：最多重试 3 次；每次发送前延迟 `100 + attempt*50` ms；
 发送后 `receiveFeatureReport(6)` 读回状态，`getUint8(1)==1` 判成功；失败重试。
+状态查询（启动时）：`receiveFeatureReport(5)` 读取一次（健康检查）；`receiveFeatureReport(6)`
+用于每条命令后的执行状态确认。**分工：5=设备状态快照，6=命令 ACK。**
 
 ## 3. 设备状态（reportId=4 主动上报，8 字节）
 
@@ -166,13 +187,18 @@ Numpad 84..99，音量 127..129，媒体 232..235，鼠标 240..244。与 HID �
 
 **灯光模式能力表**：mode 1/2/4/5/7 有 speed；3/6 有 brightness；全部无独立 color（除了常亮走 color 字段）。
 
-## 8. 多媒体键完整查表（128 类第二/三字节）
+## 8. 多媒体键完整规则（已破解：Consumer Page 0x0C 16-bit 小端序）
 
-```
-播放暂停 [128,131,1] / 上一曲 [128,182,0] / 下一曲 [128,181,0] / 停止 [128,183,0]
-计算器 [128,146,1] / 静音 [128,127,1]? / 音量+ / 音量- （前端查表部分值在 128 类展开时使用）
-```
-（精确值以后端宏表 `N()` 函数 + 实机抓包双重校验为准，见阶段 3 验证清单。）
+`[128, byte2, byte3]` 即标准 USB HID Consumer Page usage 的 16-bit LE：
+
+- `byte2 = usage_id & 0xFF`，`byte3 = (usage_id >> 8) & 0xFF`
+
+前端查表值全部吻合：上一曲 0x00B6→[128,182,0]、下一曲 0x00B5→[128,181,0]、停止 0x00B7→[128,183,0]、
+计算器 0x0192→[128,146,1]、播放器 0x0183→[128,131,1]、播放/暂停 0x00CD→[128,205,0]、
+静音 0x00E2→[128,226,0]、音量+ 0x00E9→[128,233,0]、音量- 0x00EA→[128,234,0]。
+
+**关联启发（阶段 2 验证项）**：GS3104T 键盘的 `type=1` / `type=13` 媒体键记录极可能也是
+16-bit Consumer Usage 小端序编码，抓包时优先按此假设对照。
 
 ## 9. 电池读取
 
@@ -212,10 +238,11 @@ Numpad 84..99，音量 127..129，媒体 232..235，鼠标 240..244。与 HID �
 7. 按键映射写入（cmd=1，注意先读回当前配置做基线，避免覆盖用户板载配置）
 8. 宏下发（cmd=17 擦除 + cmd=16 分块）——先在单一非关键按钮（如侧键）上验证
 
-## 12. 风险与未决项
+## 12. 风险与未决项（阶段 0 后更新）
 
-1. **多媒体 128 类第二/三字节拆分规则**：前端只提供查表值，拆分算法未显式出现——实机验证时用 2-3 个键对照确认
+1. ~~多媒体 128 类拆分规则~~ → **已破解**（§8：Consumer Page 16-bit LE）
 2. **双包模式（>9键）**：FLX3 只有 6 键永远单包，双包逻辑按前端代码移植但无法实机验证
-3. **BT 模式 PID**：前端只过滤 VID，BT 下 PID 未知，枚举时按 VID+产品名兜底
-4. **macOS hidapi 对 reportId 模型的兼容性**：send_feature_report 需要 report ID 在首字节——阶段 1 传输层需支持「带 Report ID」模式（键盘是无 ID 模式），这是传输层抽象的第二个接口差异点
+3. **BT 模式 PID**：前端只过滤 VID，BT 下 PID 未知，枚举时按 VID+产品名兜底（严禁单 VID 匹配，防误伤 Elan 触摸板）
+4. **macOS hidapi 对 reportId 模型的兼容性**：feature 读写首字节必须放 Report ID（6/5），input read 的 buf[0] 为 Report ID（4），插件层偏移全部 +1
 5. 前端在 2.4G 模式下某些命令时序可能不同（未发现差异分支，假设一致）
+6. **按键映射/档位表无硬件回读**：前端依赖 localStorage；FLX3 插件基线同样走本地 Shadow State
