@@ -1,0 +1,55 @@
+{
+  "spec_version": 1,
+  "plugin_id": "ganss_flx3",
+  "name": "GANSS FLX3 鼠标",
+  "device_type": "mouse",
+  "version": "1.0.0",
+  "author": "ganss-driver contributors",
+  "license": "MIT",
+
+  "match": [
+    {"vid": "0x04F3", "pid": ["0x0276"], "product_regex": "(?i)FLX3"},
+    {"vid": "0x04F3", "pid": ["0x0277"], "product_regex": "(?i)FLX3"},
+    {"vid": "0x04F3", "product_regex": "(?i)FLX3", "usage_page": "0xFF00"}
+  ],
+
+  "capabilities": ["keymap", "dpi", "polling_rate", "lod", "battery",
+                    "lighting", "macro", "power", "sensor_tuning", "factory_reset"],
+  "ui_modules": [
+    {"component": "mouse-view", "props": {"buttons": 6}},
+    {"component": "dpi-panel", "props": {"stages": 8, "sensors": {
+      "17": {"name": "3311", "step": 100, "max": 12000},
+      "149": {"name": "3395", "step": 50, "max": 26000},
+      "80": {"name": "3950", "step": 50, "max": 30000},
+      "32": {"name": "3220", "step": 100, "max": 8000},
+      "18": {"name": "3212", "step": 100, "max": 4800},
+      "9": {"name": "3809", "step": 100, "max": 6000},
+      "6": {"name": "S205", "step": 100, "max": 12800},
+      "112": {"name": "OM70", "step": 100, "max": 30000}
+    }, "default_sensor": 149}},
+    {"component": "macro-editor"},
+    {"component": "performance-panel", "props": {
+      "polling_rates": {"8": "125Hz", "4": "250Hz", "2": "500Hz",
+                         "1": "1000Hz", "17": "2000Hz", "18": "4000Hz", "20": "8000Hz"},
+      "lods": {"1": "1mm", "2": "2mm"}, "sleep_max": 15}},
+    {"component": "other-panel", "props": {
+      "lighting_modes": {"0": "关闭", "1": "混彩流光", "2": "呼吸", "3": "常亮",
+                          "4": "霓虹", "5": "跑马", "6": "混彩常亮", "7": "七彩波浪"}}}
+  ],
+
+  "safety": {
+    "default_mode": "HARDWARE_READBACK",
+    "modules": {
+      "keymap": "HARDWARE_READBACK",
+      "dpi": "HARDWARE_READBACK",
+      "performance": "HARDWARE_READBACK",
+      "lighting": "HARDWARE_READBACK",
+      "macro": "HARDWARE_READBACK"
+    },
+    "notes": "FLX3 每命令可读回 status==1；实时状态走 reportId=4 主动上报；按键表/DPI 基线由 Shadow State 维护。"
+  },
+
+  "connection": ["wired", "2.4g", "bt"],
+  "entry": "driver.Driver",
+  "transport": {"numbered_reports": true, "feature_report_ids": [4, 5, 6]}
+}

@@ -152,6 +152,11 @@ class PluginManager:
             if _entry_valid(item):
                 entries.append(item)
         devices = []
+        # mock preview mode for UI development (GANSS_FLX3_MOCK=1)
+        from .plugins.ganss_flx3.mock import mock_enabled, MockDevice
+        if mock_enabled() and 'ganss_flx3' in self.plugins:
+            if self.state.get('ganss_flx3', {}).get('enabled', True):
+                devices.append(MockDevice().as_device())
         for pid, p in self.plugins.items():
             if not self.state.get(pid, {}).get('enabled', True):
                 continue

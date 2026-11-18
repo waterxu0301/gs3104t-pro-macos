@@ -69,6 +69,9 @@ class Api:
         # device-scoped methods
         _fields(params, ('device', 'module', 'patch', 'scope', 'name', 'data'),
                 ('device',))
+        # mock device: no hardware IO; reflect shadow state only
+        if params['device'].endswith(':mock'):
+            return self._handle_mock(method, params)
         with _api_lock:
             plugin_id, driver, manifest, device = self.pm.resolve_device(params['device'])
             conn = self._open_connection(plugin_id, driver, device)
@@ -102,6 +105,19 @@ class Api:
                 raise ConfigError(f'未知方法: {method}')
             finally:
                 conn[0].close()
+
+    def _handle_mock(self, method, params):
+        """Virtual FLX3: apply calls are echoed back as if ACKed."""
+        if method == 'device.state':
+            return {'device': {'device_id': params['device']}, 'state': {
+                'connection': 'wired', 'online': True, 'sleeping': False,
+                'battery': 90, 'sensorType': 149, 'mock': True}}
+        if method == 'device.apply':
+            return {'device': {'device_id': params['device'], 'mock': True},
+                    'apply': {'verified': 'mock_ack', 'note': '虚拟设备：报文已在本地仿真校验，未触达硬件'}}
+        if method == 'keys.list':
+            return {'keys': [], 'media_keys': []}
+        raise ConfigError(f'虚拟设备不支持: {method}')
 
     def _open_connection(self, plugin_id, driver, device):
         from .transport import HidTransport
