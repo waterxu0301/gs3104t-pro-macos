@@ -29,6 +29,9 @@ class IOKitSeizeTransport:
         self.product_ids = product_ids
         self.dev = None
         self.max_feature = 0
+        import threading
+        self._lock = threading.Lock()
+        self._input_queue = []
 
     # ---- low-level setup ---------------------------------------------------
 
@@ -47,6 +50,8 @@ class IOKitSeizeTransport:
         cf.CFStringCreateWithCString.restype = ctypes.c_void_p
         cf.CFStringCreateWithCString.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_uint32]
         cf.CFRunLoopGetCurrent.restype = ctypes.c_void_p
+        cf.CFRunLoopRunInMode.restype = ctypes.c_long
+        cf.CFRunLoopRunInMode.argtypes = [ctypes.c_void_p, ctypes.c_double, ctypes.c_int]
         iokit.IOHIDManagerCreate.restype = ctypes.c_void_p
         iokit.IOHIDManagerCreate.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
         iokit.IOHIDManagerSetDeviceMatching.argtypes = [ctypes.c_void_p] * 2
@@ -59,6 +64,9 @@ class IOKitSeizeTransport:
         iokit.IOHIDDeviceGetReport.argtypes = [ctypes.c_void_p, ctypes.c_long,
                                                ctypes.c_long, ctypes.c_void_p,
                                                ctypes.POINTER(ctypes.c_long)]
+        iokit.IOHIDDeviceScheduleWithRunLoop.argtypes = [ctypes.c_void_p] * 3
+        iokit.IOHIDDeviceRegisterInputReportCallback.restype = ctypes.c_void_p
+        iokit.IOHIDDeviceRegisterInputReportCallback.argtypes = [ctypes.c_void_p] * 5
         iokit.IOHIDDeviceGetProperty.restype = ctypes.c_void_p
         iokit.IOHIDDeviceGetProperty.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
         cf.CFNumberGetValue.argtypes = [ctypes.c_void_p, ctypes.c_long, ctypes.c_void_p]
@@ -66,7 +74,6 @@ class IOKitSeizeTransport:
         mgr = iokit.IOHIDManagerCreate(None, 0x00010000)  # seize
         md = cf.CFDictionaryCreateMutable(None, 0, None, None)
         cf.CFDictionarySetValue(md, self._cfstr('VendorID'), self._num(self.vendor_id))
-        # product list: use broad match on vid + pick by MaxFeatureReportSize
         iokit.IOHIDManagerSetDeviceMatching(mgr, md)
         r = iokit.IOHIDManagerOpen(mgr, 0x00010000)
         if r != 0:
@@ -90,7 +97,24 @@ class IOKitSeizeTransport:
         if target is None:
             raise TransportError('接收器无 32B feature 通道（未按预期枚举）')
         self.dev = target
+        self._register_input_callback()
         return self
+
+    def _register_input_callback(self):
+        """Register input callback as a wakeup signal only (public symbols
+        IOHIDReportGetLength/GetBytes are unavailable); actual data is
+        fetched with IOHIDDeviceGetReport(input type=1, reportId=4)."""
+        iokit, cf = self.iokit, self.cf
+        CB = ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_long,
+                              ctypes.c_void_p, ctypes.c_void_p)
+        self._cb_ref = CB(self._on_input)  # keep reference alive
+        iokit.IOHIDDeviceRegisterInputReportCallback(
+            self.dev, None, None, self._cb_ref, None)
+        iokit.IOHIDDeviceScheduleWithRunLoop(self.dev, cf.CFRunLoopGetCurrent(), self.mode)
+
+    def _on_input(self, _ctx, report_type, report, _sender):
+        with self._lock:
+            self._input_queue.append(b'wake')  # signal only
 
     def _cfstr(self, s):
         return self.cf.CFStringCreateWithCString(None, s.encode(), 0x08000100)
@@ -139,15 +163,29 @@ class IOKitSeizeTransport:
         return bytes(out.raw[:ln.value])
 
     def poll_input(self, max_len, timeout_ms=10):
-        """FLX3 acks arrive via feature GetReport(6), not input reports; this
-        shim maps the framework's poll_input to a feature ack read."""
-        try:
-            raw = self.get_feature(REPORT_CMD, 32)
-        except TransportError:
-            return None
-        if raw and len(raw) >= 2:
-            return raw[0], raw[1:]
+        """Read the latest input report (reportId 4 telemetry / 6 acks) via
+        IOHIDDeviceGetReport(input). Returns (report_id, payload) or None."""
+        deadline = time.monotonic() + timeout_ms / 1000
+        while time.monotonic() < deadline:
+            for rid in (4, 6):
+                try:
+                    raw = self.get_report_input(rid)
+                except TransportError:
+                    continue
+                if raw and len(raw) > 1 and any(raw[1:]):
+                    return raw[0], raw[1:]
+            with self._lock:
+                self._input_queue.clear()
+            self.cf.CFRunLoopRunInMode(self.mode, 0.03, 0)
         return None
+
+    def get_report_input(self, report_id):
+        out = ctypes.create_string_buffer(64)
+        ln = ctypes.c_long(64)
+        r = self.iokit.IOHIDDeviceGetReport(self.dev, 1, report_id, out, ctypes.byref(ln))
+        if r != 0:
+            raise TransportError(f'GetReport(input,{report_id}) 失败: {r:#x}')
+        return bytes(out.raw[:ln.value])
 
     def write_output(self, report_id, payload):
         self.send_feature(report_id, payload)
