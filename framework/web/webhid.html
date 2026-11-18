@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>FLX3 WebHID 直连调试台</title>
+<style>
+body{font-family:-apple-system,'PingFang SC',sans-serif;background:#141518;color:#e8e8e8;padding:24px;max-width:900px;margin:0 auto}
+h1{font-size:18px}
+button{font:inherit;padding:8px 16px;border-radius:8px;border:1px solid #444;background:#2a2b30;color:#fff;cursor:pointer}
+button.primary{background:#ff6a00;border-color:#ff6a00}
+pre{background:#1e2023;padding:14px;border-radius:8px;max-height:420px;overflow:auto;font-size:12px;line-height:1.5}
+.row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
+#status{color:#888;font-size:13px;margin:8px 0}
+</style>
+</head>
+<body>
+<h1>FLX3 WebHID 直连调试台（官方同款传输层）</h1>
+<div id="status">未连接</div>
+<div class="row">
+  <button class="primary" id="btnConnect">连接设备</button>
+  <button id="btnRate1">回报率 1000Hz</button>
+  <button id="btnRate17">回报率 2000Hz</button>
+  <button id="btnLOD">LOD 1mm</button>
+  <button id="btnDPI">DPI 1600/3200/6400</button>
+  <button id="btnKeys">按键默认</button>
+  <button id="btnLight">灯光常亮</button>
+  <button id="btnDump">导出报文日志</button>
+</div>
+<pre id="log">等待连接…</pre>
+<script>
+const logEl = document.getElementById('log');
+const statusEl = document.getElementById('status');
+let device = null, seq = 0, lines = [];
+
+function log(s) { lines.push(s); logEl.textContent = lines.slice(-200).join('\n'); }
+function hexOf(d) { return Array.from(new Uint8Array(d.buffer||d)).map(v=>v.toString(16).padStart(2,'0')).join(' '); }
+
+// checksum per official setCheckSum: skip idx3, insert at idx3, pad to 31 first
+function setChecksum(logical) {
+  const data = logical.slice(0, 31);
+  while (data.length < 31) data.push(logical.length > 4 ? 255 : 0);
+  let sum = 6;
+  data.forEach((v, i) => { if (i !== 3) sum += v; });
+  data.splice(3, 0, sum & 255);
+  return data.slice(0, 32);
+}
+function nextSeq() { seq = (seq + 1) % 256; return seq; }
+function pad(logical, fill) {
+  const a = logical.slice();
+  while (a.length < 31) a.push(fill);
+  return a;
+}
+
+document.getElementById('btnConnect').onclick = async () => {
+  try {
+    const ds = await navigator.hid.requestDevice({filters:[{vendorId:1267}]});
+    device = ds.find(d => d.collections.length > 2) || ds[0];
+    if (!device) return log('未选择设备');
+    await device.open();
+    device.addEventListener('inputreport', e => log(`RECV r${e.reportId} [${hexOf(e.data)}]`));
+    statusEl.textContent = `已连接: ${device.productName}`;
+    log(`connected ${device.vendorId.toString(16)}:${device.productId.toString(16)} collections=${device.collections.length}`);
+    // 初始状态查询
+    const st = await device.receiveFeatureReport(5);
+    log(`STATE r5 [${hexOf(st.buffer)}]`);
+  } catch (e) { log('connect error: ' + e.message); }
+};
+
+async function sendCmd(logical, fill = 255) {
+  if (!device) return log('未连接');
+  logical = logical.slice(); logical[1] = nextSeq();
+  const buf = setChecksum(pad(logical, fill));
+  log(`SEND r6 [${hexOf(buf)}]`);
+  await device.sendFeatureReport(6, buf);
+  await new Promise(r => setTimeout(r, 350));
+  const ack = await device.receiveFeatureReport(6);
+  log(`ACK  r6 [${hexOf(ack.buffer)}]  status(byte1)=${ack.getUint8(1)}`);
+  return ack.getUint8(1);
+}
+
+document.getElementById('btnRate1').onclick = () => sendCmd([4,0,1,1], 0);
+document.getElementById('btnRate17').onclick = () => sendCmd([4,0,1,17], 0);
+document.getElementById('btnLOD').onclick = () => sendCmd([5,0,1,1]);
+document.getElementById('btnDPI').onclick = () => {
+  const l = [2,0,2,0,0x3f];
+  for (const dpi of [1600,3200,6400,3200,1600,800]) { const r = dpi/50-1; l.push(r&255, r>>8&255); }
+  l.push(0,0);
+  sendCmd(l);
+};
+document.getElementById('btnKeys').onclick = () => {
+  const l = [1,0,1, 16,1,0, 16,2,0, 16,4,0, 16,8,0, 16,16,0, 64,1,0, 255,255,255, 255,255,255, 255,255,255];
+  sendCmd(l);
+};
+document.getElementById('btnLight').onclick = () => sendCmd([6,0,1,255,3,0x40,0,0,0x40,0x9e,0xff]);
+document.getElementById('btnDump').onclick = () => {
+  const blob = new Blob([lines.join('\n')], {type:'text/plain'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'flx3-webhid-log.txt'; a.click();
+};
+</script>
+</body>
+</html>
