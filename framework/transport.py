@@ -57,9 +57,11 @@ class HidTransport:
     # ---- feature reports -------------------------------------------------
 
     def send_feature(self, report_id, payload):
-        """payload excludes the report ID. Total buffer = 1 + len(payload)."""
+        """payload excludes the report ID. Cython API takes the buffer with
+        report_num as first byte for numbered devices; for report_id=0 the
+        IOKit backend expects the data without a leading zero."""
         if report_id == 0:
-            buf = b'\x00' + bytes(payload)
+            buf = bytes(payload)
         else:
             buf = bytes([report_id]) + bytes(payload)
         n = self.dev.send_feature_report(buf)
@@ -67,15 +69,12 @@ class HidTransport:
             raise TransportError(f'Feature 写入不完整: {n}/{len(buf)}')
 
     def get_feature(self, report_id, length):
-        """Returns raw API buffer bytes. Numbered devices: buf[0] == report_id,
-        total length+1. Unnumbered (report_id=0): some stacks return length
-        bytes without a leading zero; both shapes are passed through and the
-        caller (driver) normalizes per its protocol."""
-        buf = bytes([report_id]) + b'\x00' * length
-        n = self.dev.get_feature_report(buf, length + 1)
-        if n < 0:
+        """Returns raw response bytes. Cython hid.device API takes report_num
+        directly and returns the payload (report ID excluded on macOS IOKit)."""
+        data = self.dev.get_feature_report(report_id, length + 1)
+        if data is None or (isinstance(data, list) and len(data) == 0):
             raise TransportError('Feature 读取失败')
-        return bytes(buf[:n])
+        return bytes(data)
 
     # ---- output / input --------------------------------------------------
 

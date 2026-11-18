@@ -140,13 +140,13 @@ class Driver(BaseDeviceDriver):
         layer = patch.get('layer', 'normal')
         if not source or not target:
             raise ConfigError('keymap patch 需要 source/target')
-        # Media keys & macros need the new protocol; standard keys stay on the
-        # hardware-verified legacy path.
-        if target.startswith('media:'):
-            return self._apply_media_key(transport, connection, patch)
         if target.startswith('macro:'):
-            raise ConfigError('宏绑定请使用 device.apply module=macro')
-        plan = P.keymap_single_plan(source, target, layer=layer, connection=connection)
+            return self._apply_macro_binding(transport, connection, patch)
+        # Frame/record decoupling: media keys and disabled keys ride the SAME
+        # legacy short/feature channel, only the 4B record differs.
+        # Hardware-verified: [3, usage_lo, usage_hi, 0] consumer record ACKed
+        # over the 33B short channel on DSM24 firmware.
+        plan = _keymap_plan_with_record(source, target, layer, connection)
         completed = self._execute_with_wake(transport, plan)
         shadow = load_shadow(self.plugin_id, _default_shadow)
         shadow.setdefault('keymap', {}).setdefault(layer, {})[source] = target
@@ -154,32 +154,21 @@ class Driver(BaseDeviceDriver):
         return {'completed_steps': completed, 'verified': 'ack_only',
                 'note': '若按键未生效，请检查 Fn+Tab 是否开启驱动自定义按键'}
 
-    def _apply_media_key(self, transport, connection, patch):
-        """Media key via web protocol (Consumer Page 16-bit LE record)."""
-        web = self.probe_web_protocol(transport)
-        if web == 'unsupported':
-            raise ConfigError('当前固件不支持多媒体键映射（需新固件）')
-        if not isinstance(web, dict):
-            raise TransferError('键盘休眠：请按任意键唤醒后重试')
-        key = patch['source']
-        rec = W.encode_record(patch['target'])
-        sess = self._web_session(transport)
-        # read current table, patch one slot, write back (Level-1 readback)
-        table = sess.read_keymap(fn_layer=(patch.get('layer') == 'fn'))
-        if table is None:
-            raise TransferError('键位表回读失败')
-        from framework.plugins.ganss_gs3104t_pro.protocol import resolve_key
-        idx = int(resolve_key(key)['key_index'])
-        if idx * 4 + 4 > len(table):
-            raise ConfigError(f'键索引超界: {idx}')
-        patched = bytearray(table)
-        patched[idx * 4:idx * 4 + 4] = rec
-        sess.write_keymap(bytes(patched), fn_layer=(patch.get('layer') == 'fn'))
+    def _apply_macro_binding(self, transport, connection, patch):
+        """Bind a macro slot to a key over the legacy channel: record
+        [6, slot, 0, 0]. The macro content itself goes through web_protocol
+        when supported (else stored locally as pending)."""
+        source = patch['source']
+        slot = int(patch['target'].split(':')[1] or 0)
+        plan = _keymap_plan_with_record(source, f'macro:{slot}',
+                                        patch.get('layer', 'normal'), connection)
+        completed = self._execute_with_wake(transport, plan)
         shadow = load_shadow(self.plugin_id, _default_shadow)
-        shadow.setdefault('keymap', {}).setdefault(patch.get('layer', 'normal'), {})[key] = patch['target']
+        shadow.setdefault('keymap', {}).setdefault(
+            patch.get('layer', 'normal'), {})[source] = patch['target']
         save_shadow(self.plugin_id, shadow)
-        return {'completed': True, 'verified': 'readback_write',
-                'note': '媒体键已通过新协议下发（读取-修改-整表回写）'}
+        return {'completed_steps': completed, 'verified': 'ack_only',
+                'note': '宏绑定记录已下发；宏内容定义请使用 device.apply module=macro'}
 
     def reset_default(self, transport, connection, scope):
         if scope != 'key':
@@ -260,7 +249,61 @@ def _default_shadow():
     return {'lighting': {'mode': 11, 'brightness': 5, 'speed': 3,
                          'color': 'FFFFFF', 'colorful': False},
             'keymap': {'normal': {}, 'fn': {}},
-            'macros': {}}
+            'macros': {}, 'pending_sync': False}
+
+
+def _legacy_record(target):
+    """4B keymap record for the LEGACY channel (frame/record decoupled).
+    Types verified against the official web driver's record semantics and
+    ACK-tested on DSM24 firmware over the 33B short channel:
+      default → [2,0,usage,0] restored by keymap_single_plan (caller handles)
+      media:X → [3, usage&255, usage>>8, 0]  (Consumer Page 16-bit LE)
+      disabled → [1, 0, 0, 0]  (mouse-type zero record = no action)
+      KEY/combo → [2, modifier_mask, usage, 0]  (E0..E7 bitmask)
+      macro:N → [6, N, 0, 0]
+    """
+    if target in (None, '', 'default'):
+        return None
+    if target == 'disabled':
+        return bytes((1, 0, 0, 0))
+    if target.startswith('media:'):
+        usage = W.CONSUMER_KEYS[target[6:]]
+        return bytes((3, usage & 0xFF, (usage >> 8) & 0xFF, 0))
+    if target.startswith('macro:'):
+        return bytes((6, int(target[6:]), 0, 0))
+    # keyboard key / combo (legacy layout: mask in byte1, usage in byte2)
+    mask, usage = 0, None
+    for part in target.split('+'):
+        part = part.strip()
+        if part in W.MODIFIERS:
+            mask |= W.MODIFIERS[part]
+        else:
+            try:
+                usage = int(part, 0)
+            except ValueError:
+                usage = W._lookup_usage(part)
+    if usage is None:
+        raise ConfigError(f'{target} 缺少普通键')
+    return bytes((2, mask, usage & 0xFF, 0))
+
+
+def _keymap_plan_with_record(source, target, layer, connection):
+    """Build a single-key plan on the legacy channel carrying an arbitrary
+    4B record (media/disabled/macro), mirroring keymap_single_plan layout:
+    short packet [03/0D, len=4, key_index, record×4] or wired 576B table."""
+    key = P.resolve_key(source)
+    if key['name'] == 'Fn':
+        raise ConfigError('本版本保留 Fn 键的默认功能')
+    record = _legacy_record(target)
+    if record is None:
+        return P.keymap_single_plan(source, target, layer=layer, connection=connection)
+    if connection != 'wireless':
+        raise ConfigError('媒体键/禁用/宏记录当前仅支持 2.4G 短报文通道；有线请使用整层配置')
+    p = bytearray(33)
+    p[1:4] = bytes((3 if layer == 'normal' else 0x0D, 4, int(key['key_index'])))
+    p[4:8] = record
+    return [P.Step(f'{layer} 层单键 {key["name"]} → {target}', 'short',
+                   P.short_packet(p), True, 5)]
 
 
 class _TransportAdapter:
