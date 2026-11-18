@@ -9,6 +9,7 @@ Transport mapping to framework conventions:
 - Wired feature channel: report_id=0, 65B API buffer (0x00 + 64B payload).
 - 2.4G short channel: report_id=0 output write 33B; input responses 32/33B.
 """
+import json
 import re
 import sys
 import time
@@ -18,6 +19,7 @@ from framework.base_driver import BaseDeviceDriver
 from framework.errors import ConfigError, TransferError
 from framework.safety import load_shadow, save_shadow
 from . import protocol as P
+from . import web_protocol as W
 from .runner import ProtocolError, execute
 
 PLUGIN_DIR = Path(__file__).resolve().parent
@@ -60,12 +62,34 @@ class Driver(BaseDeviceDriver):
         return {'name': 'GANSS GS3104T PRO', 'connection': connection,
                 'hint': '映射生效前请按 Fn+Tab 开启驱动自定义按键'}
 
+    def _web_session(self, transport):
+        """New-protocol session on the 64B feature endpoint (if4)."""
+        # pick_endpoint returns the short channel (if3) as primary; the AA
+        # protocol was observed answering on the 64B feature endpoint.
+        return W.WebProtocolSession(transport)
+
+    def probe_web_protocol(self, transport):
+        """Returns device info dict / 'unsupported' / None (asleep)."""
+        return self._web_session(transport).probe()
+
     def read_state(self, transport, connection):
-        # No hardware readback exists for keymap; lighting per-key read paths
-        # are unverified. Shadow state is the source of truth.
         shadow = load_shadow(self.plugin_id, _default_shadow)
-        return {'connection': connection, 'shadow': shadow,
-                'readback': 'none', 'fn_tab_required': True}
+        state = {'connection': connection, 'shadow': shadow,
+                 'fn_tab_required': True}
+        web = self.probe_web_protocol(transport)
+        if isinstance(web, dict):
+            state['web_protocol'] = True
+            state['battery'] = web.get('battery_level')
+            state['firmware_version'] = web.get('frame_version')
+            state['readback'] = 'hardware'
+        elif web == 'unsupported':
+            state['web_protocol'] = False
+            state['readback'] = 'none'
+        else:
+            state['web_protocol'] = None
+            state['readback'] = 'none'
+            state['note'] = '键盘可能休眠；新协议能力（媒体键/宏/回读）待唤醒后探测'
+        return state
 
     # ---- config operations -------------------------------------------------
 
@@ -74,7 +98,28 @@ class Driver(BaseDeviceDriver):
             return self._apply_lighting(transport, connection, patch)
         if module == 'keymap':
             return self._apply_keymap(transport, connection, patch)
+        if module == 'macro':
+            return self._apply_macro(transport, connection, patch)
         raise ConfigError(f'未知模块: {module}')
+
+    def _apply_macro(self, transport, connection, patch):
+        """Macro binding via the web protocol. patch: {slot:int, actions:[...]}. 
+        Requires new firmware (web protocol); legacy firmware raises."""
+        web = self.probe_web_protocol(transport)
+        if web != 'unsupported' and not isinstance(web, dict):
+            raise TransferError('键盘休眠或新协议不可用：请按任意键唤醒后重试')
+        if web == 'unsupported':
+            raise ConfigError('当前固件不支持宏下发（需新固件，官方网页驱动配套版本）')
+        actions = patch.get('actions', [])
+        slot = int(patch.get('slot', 0))
+        block = W.encode_macro_events(actions)
+        sess = self._web_session(transport)
+        ok = sess.write_macro({slot: block})
+        shadow = load_shadow(self.plugin_id, _default_shadow)
+        shadow.setdefault('macros', {})[str(slot)] = patch
+        save_shadow(self.plugin_id, shadow)
+        return {'completed': ok, 'verified': 'sent', 'experimental': True,
+                'note': '宏指令已按官方网页驱动协议下发（实验性，请实际验证）'}
 
     def _apply_lighting(self, transport, connection, patch):
         plan = P.light_plan(connection=connection,
@@ -83,7 +128,7 @@ class Driver(BaseDeviceDriver):
                             speed=patch.get('speed', 3),
                             color=patch.get('color', 'FFFFFF'),
                             colorful=patch.get('colorful', False))
-        completed = self._execute(transport, plan)
+        completed = self._execute_with_wake(transport, plan)
         shadow = load_shadow(self.plugin_id, _default_shadow)
         shadow['lighting'] = patch
         save_shadow(self.plugin_id, shadow)
@@ -95,13 +140,46 @@ class Driver(BaseDeviceDriver):
         layer = patch.get('layer', 'normal')
         if not source or not target:
             raise ConfigError('keymap patch 需要 source/target')
+        # Media keys & macros need the new protocol; standard keys stay on the
+        # hardware-verified legacy path.
+        if target.startswith('media:'):
+            return self._apply_media_key(transport, connection, patch)
+        if target.startswith('macro:'):
+            raise ConfigError('宏绑定请使用 device.apply module=macro')
         plan = P.keymap_single_plan(source, target, layer=layer, connection=connection)
-        completed = self._execute(transport, plan)
+        completed = self._execute_with_wake(transport, plan)
         shadow = load_shadow(self.plugin_id, _default_shadow)
         shadow.setdefault('keymap', {}).setdefault(layer, {})[source] = target
         save_shadow(self.plugin_id, shadow)
         return {'completed_steps': completed, 'verified': 'ack_only',
                 'note': '若按键未生效，请检查 Fn+Tab 是否开启驱动自定义按键'}
+
+    def _apply_media_key(self, transport, connection, patch):
+        """Media key via web protocol (Consumer Page 16-bit LE record)."""
+        web = self.probe_web_protocol(transport)
+        if web == 'unsupported':
+            raise ConfigError('当前固件不支持多媒体键映射（需新固件）')
+        if not isinstance(web, dict):
+            raise TransferError('键盘休眠：请按任意键唤醒后重试')
+        key = patch['source']
+        rec = W.encode_record(patch['target'])
+        sess = self._web_session(transport)
+        # read current table, patch one slot, write back (Level-1 readback)
+        table = sess.read_keymap(fn_layer=(patch.get('layer') == 'fn'))
+        if table is None:
+            raise TransferError('键位表回读失败')
+        from framework.plugins.ganss_gs3104t_pro.protocol import resolve_key
+        idx = int(resolve_key(key)['key_index'])
+        if idx * 4 + 4 > len(table):
+            raise ConfigError(f'键索引超界: {idx}')
+        patched = bytearray(table)
+        patched[idx * 4:idx * 4 + 4] = rec
+        sess.write_keymap(bytes(patched), fn_layer=(patch.get('layer') == 'fn'))
+        shadow = load_shadow(self.plugin_id, _default_shadow)
+        shadow.setdefault('keymap', {}).setdefault(patch.get('layer', 'normal'), {})[key] = patch['target']
+        save_shadow(self.plugin_id, shadow)
+        return {'completed': True, 'verified': 'readback_write',
+                'note': '媒体键已通过新协议下发（读取-修改-整表回写）'}
 
     def reset_default(self, transport, connection, scope):
         if scope != 'key':
@@ -114,21 +192,75 @@ class Driver(BaseDeviceDriver):
         except ProtocolError as e:
             raise TransferError(str(e)) from e
 
+    def _execute_with_wake(self, transport, plan, attempts=3):
+        """Keyboard sleeps when idle; short-packet echo only flows while
+        awake. Retry on separate opens — success requires the user to press
+        any key if the device is fully asleep."""
+        last_err = None
+        for _ in range(attempts):
+            try:
+                return self._execute(transport, plan)
+            except TransferError as e:
+                last_err = e
+                time.sleep(1.0)
+        raise TransferError(
+            f'{last_err}\n键盘可能休眠：请按任意键唤醒键盘后重试') from last_err
+
     # ---- frontend data ----------------------------------------------------
 
     def keys_list(self):
-        import json
         km = json.loads((PLUGIN_DIR / 'data' / 'keymap.json').read_text(encoding='utf-8'))
         return [{'index': int(k['key_index']), 'name': k['name'], 'usage': k['code'],
                  'rect': [int(k['rect_left']), int(k['rect_top']),
                           int(k['rect_width']), int(k['rect_height'])]}
                 for k in km]
 
+    def media_keys_list(self):
+        return [{'id': f'media:{k}', 'name': k} for k in W.CONSUMER_KEYS]
+
+    # ---- profiles (multi-config + import/export) --------------------------
+
+    def list_profiles(self):
+        store = load_shadow(self.plugin_id, _default_profiles_store)
+        return [{'name': n, 'keymap': v.get('keymap', {}), 'lighting': v.get('lighting', {})}
+                for n, v in store.get('profiles', {}).items()]
+
+    def save_profile(self, name, data):
+        store = load_shadow(self.plugin_id, _default_profiles_store)
+        store.setdefault('profiles', {})[name] = data
+        save_shadow(self.plugin_id, store)
+        return {'saved': name}
+
+    def delete_profile(self, name):
+        store = load_shadow(self.plugin_id, _default_profiles_store)
+        store.get('profiles', {}).pop(name, None)
+        save_shadow(self.plugin_id, store)
+        return {'deleted': name}
+
+    def export_profiles(self):
+        return load_shadow(self.plugin_id, _default_profiles_store)
+
+    def import_profiles(self, payload):
+        if not isinstance(payload, dict) or 'profiles' not in payload:
+            raise ConfigError('导入格式错误：需要 {"profiles": {...}}')
+        merged = load_shadow(self.plugin_id, _default_profiles_store)
+        merged.setdefault('profiles', {}).update(payload['profiles'])
+        save_shadow(self.plugin_id, merged)
+        return {'imported': len(payload['profiles'])}
+
+
+def _default_profiles_store():
+    return {'active': None, 'profiles': {
+        '默认': {'keymap': {'normal': {}, 'fn': {}},
+                 'lighting': {'mode': 11, 'brightness': 5, 'speed': 3,
+                              'color': 'FFFFFF', 'colorful': False}}}}
+
 
 def _default_shadow():
     return {'lighting': {'mode': 11, 'brightness': 5, 'speed': 3,
                          'color': 'FFFFFF', 'colorful': False},
-            'keymap': {'normal': {}, 'fn': {}}}
+            'keymap': {'normal': {}, 'fn': {}},
+            'macros': {}}
 
 
 class _TransportAdapter:

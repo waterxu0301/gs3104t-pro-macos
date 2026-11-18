@@ -54,9 +54,13 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+class ReusableServer(ThreadingHTTPServer):
+    allow_reuse_address = True
+
+
 def serve(host='127.0.0.1', port=8340, api=None):
     Handler.api = api or Api()
-    server = ThreadingHTTPServer((host, port), Handler)
+    server = ReusableServer((host, port), Handler)
     print(f'GANSS 驱动框架已启动: http://{host}:{port}/  (Ctrl+C 退出)')
     try:
         server.serve_forever()

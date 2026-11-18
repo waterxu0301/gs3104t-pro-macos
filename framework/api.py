@@ -67,7 +67,7 @@ class Api:
             return {'devices': self.pm.enumerate_all()}
 
         # device-scoped methods
-        _fields(params, ('device', 'module', 'patch', 'scope'),
+        _fields(params, ('device', 'module', 'patch', 'scope', 'name', 'data'),
                 ('device',))
         with _api_lock:
             plugin_id, driver, manifest, device = self.pm.resolve_device(params['device'])
@@ -84,7 +84,21 @@ class Api:
                     return {'device': device,
                             'reset': driver.reset_default(*conn, scope)}
                 if method == 'keys.list':
-                    return {'keys': driver.keys_list()}
+                    return {'keys': driver.keys_list(),
+                            'media_keys': getattr(driver, 'media_keys_list', list)()}
+                if method == 'profiles.list':
+                    return {'profiles': driver.list_profiles()}
+                if method == 'profiles.save':
+                    _fields(params, ('device', 'name', 'data'), ('device', 'name'))
+                    return {'profiles': driver.save_profile(params['name'], params.get('data', {}))}
+                if method == 'profiles.delete':
+                    _fields(params, ('device', 'name'), ('device', 'name'))
+                    return {'profiles': driver.delete_profile(params['name'])}
+                if method == 'profiles.export':
+                    return {'export': driver.export_profiles()}
+                if method == 'profiles.import':
+                    _fields(params, ('device', 'data'), ('device', 'data'))
+                    return {'result': driver.import_profiles(params['data'])}
                 raise ConfigError(f'未知方法: {method}')
             finally:
                 conn[0].close()

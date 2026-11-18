@@ -2,97 +2,353 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>GANSS 驱动框架 (阶段1)</title>
+<title>GANSS GS3104T PRO 键盘驱动</title>
 <style>
-:root{--bg:#f5f6f8;--card:#fff;--ink:#1a1d21;--muted:#6b7280;--accent:#ff6a00;--line:#e5e7eb;--ok:#16a34a;--err:#dc2626}
+:root{--bg:#f5f6f8;--card:#fff;--ink:#1a1d21;--muted:#6b7280;--accent:#ff6a00;--line:#e5e7eb;
+  --ok:#16a34a;--err:#dc2626;--modified:#2563eb}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,'PingFang SC',sans-serif;background:var(--bg);color:var(--ink)}
-header{background:var(--card);border-bottom:1px solid var(--line);padding:14px 24px;display:flex;gap:12px;align-items:center}
+header{background:var(--card);border-bottom:1px solid var(--line);padding:12px 24px;display:flex;gap:12px;align-items:center}
 .logo{font-weight:800;font-size:20px;letter-spacing:2px}
-main{max-width:1000px;margin:24px auto;padding:0 24px;display:grid;grid-template-columns:1fr 1fr;gap:20px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px}
-h2{font-size:15px;margin-bottom:12px}
-button{font:inherit;cursor:pointer;border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 14px}
-button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
 .badge{font-size:11px;background:#f3f4f6;border-radius:999px;padding:2px 10px;color:var(--muted)}
-.device,.plugin{padding:10px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;font-size:13px}
-.meta{color:var(--muted);font-size:11px;margin-top:4px}
-label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
-select,input{width:100%;padding:7px 10px;border:1px solid var(--line);border-radius:8px;font:inherit}
+.badge.warn{background:#fef3c7;color:#92400e}
+main{max-width:1280px;margin:20px auto;padding:0 24px;display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px}
+h2{font-size:14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 12px}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.layer-switch{display:flex;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.layer-switch button{border:none;border-radius:0;padding:6px 16px}
+.layer-switch button.active{background:var(--accent);color:#fff}
+#kb{position:relative;margin:10px auto}
+#kb svg{display:block}
+.keyrect{fill:#fff;stroke:#9ca3af;stroke-width:1;cursor:pointer}
+.keyrect:hover{fill:#fff7f2}
+.keyrect.selected{stroke:var(--accent);stroke-width:2.5}
+.keyrect.modified{stroke:var(--modified);stroke-width:2}
+.keyrect.reserved{fill:#f3f4f6;stroke-dasharray:3 2}
+.keylabel{font-size:9px;fill:#374151;pointer-events:none;user-select:none}
+.keymap-badge{font-size:8px;fill:var(--modified);pointer-events:none;font-weight:700}
+.panel label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+.panel select,.panel input{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px}
+.mods{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px}
+.mods label{display:flex;gap:4px;align-items:center;font-size:11px;margin:0;color:var(--ink)}
 #status{font-size:13px;padding:10px;border-radius:8px;margin-top:12px;display:none;white-space:pre-wrap}
 #status.ok{display:block;background:#f0fdf4;color:var(--ok)}
 #status.err{display:block;background:#fef2f2;color:var(--err)}
 #status.info{display:block;background:#eff6ff;color:#2563eb}
-.row{display:flex;gap:10px}
+.profile-item{display:flex;justify-content:space-between;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:8px;margin-bottom:6px;font-size:13px}
+.profile-item.active{border-color:var(--accent);background:#fff7f2}
+.macro-ev{display:flex;gap:6px;margin-bottom:4px;font-size:11px;align-items:center}
+.macro-ev input{width:70px;padding:3px 6px}
+.device-info{font-size:12px;color:var(--muted);margin:6px 0}
+textarea{width:100%;height:70px;font:12px ui-monospace,monospace;border:1px solid var(--line);border-radius:8px;padding:6px}
+.hidden{display:none}
 </style>
 </head>
 <body>
 <header>
-  <span class="logo">GANS<span style="color:var(--accent)">S</span></span><span>驱动框架</span>
-  <span class="badge">阶段1 · 插件化</span><span style="flex:1"></span>
-  <span class="badge">127.0.0.1 · 本地运行</span>
+  <span class="logo">GANS<span style="color:var(--accent)">S</span></span><span>GS3104T PRO 驱动</span>
+  <span class="badge warn">⚠ 映射生效需按 Fn+Tab 开启驱动自定义</span>
+  <span style="flex:1"></span>
+  <span id="devInfo" class="badge"></span>
 </header>
 <main>
   <section class="card">
-    <h2>设备 <button class="primary" onclick="scan()">刷新扫描</button></h2>
-    <div id="devices"></div>
-    <h2 style="margin-top:18px">已加载插件</h2>
-    <div id="plugins"></div>
+    <h2>
+      <div class="layer-switch">
+        <button id="layerNormal" class="active" onclick="setLayer('normal')">普通层</button>
+        <button id="layerFn" onclick="setLayer('fn')">Fn 层</button>
+      </div>
+      <span class="badge" id="modifiedCount"></span>
+    </h2>
+    <div id="kb"></div>
   </section>
-  <section class="card">
-    <h2>灯光控制</h2>
-    <label>模式</label>
-    <select id="mode"></select>
-    <div class="row">
-      <div><label>亮度</label><input type="number" id="brightness" min="0" max="5" value="4"></div>
-      <div><label>速度</label><input type="number" id="speed" min="0" max="5" value="3"></div>
-      <div><label>颜色</label><input type="color" id="color" value="#ff6a00" style="height:34px;padding:2px"></div>
+  <aside>
+    <div class="card panel">
+      <h2>键位配置 <span class="badge" id="selKeyName">未选择</span></h2>
+      <label>映射类型</label>
+      <select id="mapType" onchange="renderTypeUI()">
+        <option value="default">默认（恢复出厂）</option>
+        <option value="key">按键 / 组合键</option>
+        <option value="media">多媒体键</option>
+        <option value="macro">宏</option>
+      </select>
+      <div id="uiKey">
+        <label>组合键（如 LCtrl+C，单键直接填 usage 0x04 等）</label>
+        <input id="comboKey" placeholder="LCtrl+C" list="usageList">
+        <div class="mods" id="modifierBoxes"></div>
+      </div>
+      <div id="uiMedia" class="hidden">
+        <label>多媒体键</label>
+        <select id="mediaKey"></select>
+      </div>
+      <div id="uiMacro" class="hidden">
+        <label>宏绑定槽位</label>
+        <input id="macroSlot" type="number" min="0" max="99" value="0">
+        <label>宏动作（按下/抬起 + 延迟ms）</label>
+        <div id="macroEvents"></div>
+        <button onclick="addMacroEvent()">+ 添加事件</button>
+        <label style="margin-top:8px">说明：actionType=3（键盘），下发走官方新协议（实验性）</label>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="primary" onclick="applyMap()">下发映射</button>
+        <button onclick="applyDefault()">恢复默认</button>
+      </div>
     </div>
-    <div style="display:flex;gap:10px;margin-top:14px">
-      <button class="primary" onclick="applyLight()">应用灯光</button>
-      <button onclick="lightOff()">关闭背光</button>
+    <div class="card" style="margin-top:16px">
+      <h2>配置文件</h2>
+      <div id="profiles"></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <input id="profileName" placeholder="新配置名" style="flex:1">
+        <button onclick="saveProfile()">保存当前</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button onclick="exportProfiles()">导出 JSON</button>
+        <label style="flex:1;position:relative;overflow:hidden">
+          <input type="file" id="importFile" accept=".json" style="position:absolute;inset:0;opacity:0;cursor:pointer" onchange="importProfiles(event)">
+          <button style="width:100%">导入 JSON</button>
+        </label>
+      </div>
     </div>
-    <h2 style="margin-top:18px">按键映射 (2.4G)</h2>
-    <div class="row">
-      <div><label>来源键</label><input id="src" value="Q" list="keys"></div>
-      <div><label>目标</label><input id="dst" value="Q" list="keys"></div>
+    <div class="card" style="margin-top:16px">
+      <h2>设备状态</h2>
+      <div id="stateInfo" class="device-info">—</div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="primary" style="flex:1" onclick="lighting()">测试灯光（静态·橙色）</button>
+      </div>
     </div>
-    <label>层</label>
-    <select id="layer"><option value="normal">普通层</option><option value="fn">Fn 层</option></select>
-    <div style="margin-top:12px"><button class="primary" onclick="applyMap()">下发映射</button></div>
-    <div id="status"></div>
-    <p class="meta" style="margin-top:12px">⚠️ 映射生效前需按 <b>Fn+Tab</b> 开启驱动自定义按键模式。写入成功=硬件ACK确认；请实际验证效果。</p>
-  </section>
+  </aside>
 </main>
+<div style="max-width:1280px;margin:0 auto;padding:0 24px 30px">
+  <div id="status"></div>
+</div>
+<datalist id="usageList"></datalist>
 <script>
 const $=i=>document.getElementById(i);
-let devices=[],selected=null;
-const MODES=[[0,'关闭'],[1,'静态恒亮'],[2,'单点亮'],[3,'单熄灭'],[4,'繁星点点'],[5,'漫天飞雪'],[6,'百花争艳'],[7,'动态呼吸'],[8,'光谱循环'],[9,'彩泉涌动'],[10,'多彩纵横'],[11,'随波逐流'],[12,'峰回路转'],[13,'一触即发'],[14,'一石二鸟'],[15,'涟漪扩散'],[16,'川流不息'],[17,'重峦叠嶂'],[18,'斜风细雨'],[19,'来回穿梭']];
-$('mode').innerHTML=MODES.map(([n,nm])=>`<option value="${n}"${n===11?' selected':''}>${n} ${nm}</option>`).join('');
-function status(kind,text){const s=$('status');s.className=kind;s.textContent=text}
+let devices=[],selected=null,layer='normal',keys=[],modified={normal:{},fn:{}},curKey=null,mediaKeys=[];
+
+function status(k,t){const s=$('status');s.className=k;s.textContent=t}
 async function api(m,p={}){const r=await fetch('/api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_version:2,id:String(Date.now()),method:m,params:p})});return r.json()}
-async function scan(){
-  status('info','扫描中…');
-  const r=await api('devices.scan');if(!r.ok)return status('err',r.error.message);
-  devices=r.result.devices;
-  $('devices').innerHTML=devices.length?devices.map((d,i)=>`<div class="device" data-i="${i}" onclick="sel(${i})" style="${selected===i?'border-color:var(--accent);background:#fff7f2':''}"><b>${d.name}</b> <span class="badge">${d.device_type}</span><div class="meta">${d.device_id} · ${d.connection} · ${d.plugin_id}</div></div>`).join(''):'<div class="meta">未发现设备</div>';
-  const p=await api('plugins.list');
-  $('plugins').innerHTML=p.result.plugins.map(pl=>`<div class="plugin"><b>${pl.name}</b> <span class="badge">${pl.plugin_id} v${pl.version}</span><div class="meta">能力: ${pl.capabilities.join(', ')} · ${pl.enabled?'已启用':'已禁用'}</div><div style="margin-top:6px"><button onclick="togglePlugin('${pl.plugin_id}',${!pl.enabled})">${pl.enabled?'禁用':'启用'}</button></div></div>`).join('');
-  status(devices.length?'ok':'err',devices.length?`发现 ${devices.length} 台设备`:'未发现设备');
+
+// ---- init ----
+(async()=>{
+  const r=await api('devices.scan');
+  if(r.ok&&r.result.devices.length){devices=r.result.devices;selected=0;
+    $('devInfo').textContent=devices[0].name+' · '+devices[0].connection;
+    await loadState();
+  } else $('devInfo').textContent='未发现键盘';
+  const k=await api('keys.list',{device:devices[0]?.device_id||''});
+  if(k.ok){keys=k.result.keys;mediaKeys=k.result.media_keys||[];
+    $('mediaKey').innerHTML=mediaKeys.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+    buildCanvas();buildUsageList();buildModifiers();
+  }
+  await refreshProfiles();
+})();
+
+async function loadState(){
+  const r=await api('device.state',{device:devices[0].device_id});
+  if(r.ok){
+    const st=r.result.state;
+    if(st.shadow){modified=st.shadow.keymap||{normal:{},fn:{}}}
+    $('stateInfo').innerHTML=
+      `连接: ${st.connection}<br>硬件回读: ${st.readback==='hardware'?'✅ 支持（新固件）':'❌ 不支持（旧固件/休眠）'}`+
+      (st.battery!=null?`<br>电量: ${st.battery}%`:'')+
+      (st.web_protocol===false?'<br>⚠ 媒体键/宏需新固件':'');
+  }
 }
-function sel(i){selected=i;scan()}
-async function togglePlugin(id,en){await api('plugins.set_enabled',{plugin_id:id,enabled:en});scan()}
-async function needDev(){if(selected==null||!devices[selected]){status('err','请先扫描并选择设备');return null}return devices[selected].device_id}
-async function applyLight(){const d=await needDev();if(!d)return;
-  const r=await api('device.apply',{device:d,module:'lighting',patch:{mode:+$('mode').value,color:$('color').value.slice(1).toUpperCase(),brightness:+$('brightness').value,speed:+$('speed').value}});
-  status(r.ok?'ok':'err',r.ok?'灯光指令已发送（硬件ACK通过），请目视确认效果':r.error.message)}
-async function lightOff(){const d=await needDev();if(!d)return;
-  const r=await api('device.apply',{device:d,module:'lighting',patch:{mode:0}});
-  status(r.ok?'ok':'err',r.ok?'背光已关闭':r.error.message)}
-async function applyMap(){const d=await needDev();if(!d)return;
-  const r=await api('device.apply',{device:d,module:'keymap',patch:{source:$('src').value.trim(),target:$('dst').value.trim(),layer:$('layer').value}});
-  status(r.ok?'ok':'err',r.ok?`映射 ${$('src').value}→${$('dst').value} 已发送（ACK通过），请按键验证`:r.error.message)}
-scan();
+
+// ---- keyboard canvas ----
+function buildCanvas(){
+  if(!keys.length)return;
+  const maxX=Math.max(...keys.map(k=>k.rect[0]+k.rect[2]));
+  const maxY=Math.max(...keys.map(k=>k.rect[1]+k.rect[3]));
+  const scale=1.9, W=(maxX+10)*scale, H=(maxY+10)*scale;
+  let svg=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">`;
+  for(const k of keys){
+    const[x,y,w,h]=k.rect;
+    const isFn=k.name==='Fn', isTab=k.name==='Tab';
+    svg+=`<g data-idx="${k.index}">
+      <rect class="keyrect" data-idx="${k.index}" x="${(x+5)*scale}" y="${(y+5)*scale}" width="${w*scale}" height="${h*scale}" rx="4"/>
+      <text class="keylabel" x="${(x+5)*scale+w*scale/2}" y="${(y+5)*scale+h*scale/2+3}" text-anchor="middle">${k.name}</text>
+      <text class="keymap-badge" data-badge="${k.index}" x="${(x+5)*scale+w*scale-2}" y="${(y+5)*scale+10}" text-anchor="end"></text>
+    </g>`;
+  }
+  svg+='</svg>';
+  $('kb').innerHTML=svg;
+  $('kb').addEventListener('click',e=>{
+    const r=e.target.closest('.keyrect');if(!r)return;
+    selectKey(+r.dataset.idx);
+  });
+  refreshBadges();
+}
+function keyByIndex(i){return keys.find(k=>k.index===i)}
+function selectKey(i){
+  curKey=i;
+  document.querySelectorAll('.keyrect').forEach(r=>r.classList.toggle('selected',+r.dataset.idx===i));
+  const k=keyByIndex(i);
+  $('selKeyName').textContent=`${k.name} (#${i})`;
+  const isFnKey=k.name==='Fn';
+  if(isFnKey){status('info','Fn 为系统保留键，禁止修改（防自锁保护）')}
+  const cur=modified[layer][k.name];
+  renderTypeUI();
+  if(cur){
+    if(cur.startsWith('media:')){$('mapType').value='media';$('mediaKey').value=cur}
+    else if(cur.startsWith('macro:')){$('mapType').value='macro';$('macroSlot').value=cur.slice(6)}
+    else if(cur!=='default'){$('mapType').value='key';$('comboKey').value=cur}
+    else $('mapType').value='default';
+  } else $('mapType').value='default';
+}
+function setLayer(l){layer=l;
+  $('layerNormal').classList.toggle('active',l==='normal');
+  $('layerFn').classList.toggle('active',l==='fn');
+  refreshBadges();
+}
+function refreshBadges(){
+  const m=modified[layer]||{};let n=0;
+  document.querySelectorAll('.keyrect').forEach(r=>{
+    const k=keyByIndex(+r.dataset.idx);
+    const isMod=m[k.name]&&m[k.name]!=='default';
+    r.classList.toggle('modified',!!isMod);
+    r.classList.toggle('reserved',k.name==='Fn');
+    if(isMod)n++;
+    const badge=document.querySelector(`[data-badge="${k.index}"]`);
+    if(badge)badge.textContent=isMod?(m[k.name]==='default'?'⌂':m[k.name].replace('media:','').slice(0,5)):'';
+  });
+  $('modifiedCount').textContent=`已改 ${n} 键`;
+}
+function buildUsageList(){
+  const common=[['A',4],['B',5],['C',6],['V',25],['X',27],['Q',20],['W',26],['Esc',41],['Space',44],['Enter',40],['Tab',43],['0x04',4]];
+  $('usageList').innerHTML=common.map(([n,u])=>`<option value="${n}">`).join('');
+}
+function buildModifiers(){
+  const mods=['LCtrl','LShift','LAlt','LWin','RCtrl','RShift','RAlt','RWin'];
+  $('modifierBoxes').innerHTML=mods.map(m=>`<label><input type="checkbox" data-mod="${m}">${m}</label>`).join('');
+}
+function renderTypeUI(){
+  const t=$('mapType').value;
+  $('uiKey').classList.toggle('hidden',t!=='key');
+  $('uiMedia').classList.toggle('hidden',t!=='media');
+  $('uiMacro').classList.toggle('hidden',t!=='macro');
+}
+
+// ---- mapping apply ----
+function comboFromUI(){
+  const mods=[...document.querySelectorAll('[data-mod]:checked')].map(c=>c.dataset.mod);
+  const key=$('comboKey').value.trim();
+  if(!key)return null;
+  return [...mods,key].join('+');
+}
+async function applyMap(){
+  if(curKey==null)return status('err','请先点击选择一个按键');
+  const k=keyByIndex(curKey);
+  if(k.name==='Fn')return status('err','Fn 为系统保留键，禁止修改');
+  const t=$('mapType').value;
+  let target='default';
+  if(t==='key'){target=comboFromUI();if(!target)return status('err','请填写目标键')}
+  if(t==='media'){target=$('mediaKey').value}
+  if(t==='macro'){target=`macro:${$('macroSlot').value}`}
+  const r=await api('device.apply',{device:devices[0].device_id,module:'keymap',
+    patch:{source:k.name,target,layer}});
+  if(r.ok){
+    modified[layer][k.name]=target;
+    // macro: also send macro definition if editor has events
+    if(t==='macro'){
+      const acts=collectMacroEvents();
+      if(acts.length){
+        const mr=await api('device.apply',{device:devices[0].device_id,module:'macro',
+          patch:{slot:+$('macroSlot').value,actions:acts}});
+        if(!mr.ok)status('err','宏定义下发失败: '+mr.error.message);
+      }
+    }
+    refreshBadges();
+    status('ok',`已下发 ${k.name} → ${target}`+(r.result.apply.note?'\n'+r.result.apply.note:''));
+  } else status('err',r.error.message);
+}
+async function applyDefault(){
+  if(curKey==null)return status('err','请先选择按键');
+  const k=keyByIndex(curKey);
+  if(k.name==='Fn')return status('err','Fn 为系统保留键');
+  const r=await api('device.apply',{device:devices[0].device_id,module:'keymap',
+    patch:{source:k.name,target:'default',layer}});
+  if(r.ok){modified[layer][k.name]='default';refreshBadges();status('ok',`${k.name} 已恢复默认`)}
+  else status('err',r.error.message);
+}
+async function lighting(){
+  const r=await api('device.apply',{device:devices[0].device_id,module:'lighting',
+    patch:{mode:1,color:'FF6A00',brightness:4,speed:3}});
+  status(r.ok?'ok':'err',r.ok?'灯光已切换为静态橙色':'灯光失败: '+r.error.message);
+}
+
+// ---- macro editor ----
+let macroEvents=[];
+function addMacroEvent(ev){
+  macroEvents.push(ev||{isPress:true,keyCode:4,delay_ms:20});
+  renderMacroEvents();
+}
+function renderMacroEvents(){
+  $('macroEvents').innerHTML=macroEvents.map((e,i)=>`
+    <div class="macro-ev">
+      <select onchange="macroEvents[${i}].isPress=this.value==='1'">
+        <option value="1"${e.isPress?' selected':''}>按下</option>
+        <option value="0"${!e.isPress?' selected':''}>抬起</option>
+      </select>
+      <input type="number" value="${e.keyCode}" title="HID usage" onchange="macroEvents[${i}].keyCode=+this.value">
+      <input type="number" value="${e.delay_ms}" title="延迟 ms" onchange="macroEvents[${i}].delay_ms=+this.value">
+      <button onclick="macroEvents.splice(${i},1);renderMacroEvents()">×</button>
+    </div>`).join('');
+}
+function collectMacroEvents(){return macroEvents}
+
+// ---- profiles ----
+async function refreshProfiles(){
+  const r=await api('profiles.list',{device:devices[0].device_id});
+  if(r.ok){
+    const ps=r.result.profiles;
+    $('profiles').innerHTML=ps.length?ps.map(p=>`
+      <div class="profile-item"><span>${p.name}</span>
+        <span><button onclick="loadProfile('${p.name}')">载入</button>
+        <button onclick="delProfile('${p.name}')">×</button></span>
+      </div>`).join(''):'<span class="badge">暂无配置</span>';
+  }
+}
+async function saveProfile(){
+  const name=$('profileName').value.trim();
+  if(!name)return status('err','请填写配置名');
+  const r=await api('profiles.save',{device:devices[0].device_id,name,
+    data:{keymap:JSON.parse(JSON.stringify(modified))}});
+  if(r.ok){status('ok','配置已保存: '+name);$('profileName').value='';refreshProfiles()}
+  else status('err',r.error.message);
+}
+async function loadProfile(name){
+  const r=await api('profiles.list',{device:devices[0].device_id});
+  if(!r.ok)return status('err',r.error.message);
+  const p=r.result.profiles.find(x=>x.name===name);
+  if(!p)return;
+  modified={normal:{...(p.keymap.normal||{})},fn:{...(p.keymap.fn||{})}};
+  refreshBadges();
+  status('ok',`已载入配置「${name}」（映射表已同步到界面；逐键下发请点击各键）`);
+}
+async function delProfile(name){
+  await api('profiles.delete',{device:devices[0].device_id,name});
+  refreshProfiles();
+}
+async function exportProfiles(){
+  const r=await api('profiles.export',{device:devices[0].device_id});
+  if(r.ok){
+    const blob=new Blob([JSON.stringify(r.result.export,null,2)],{type:'application/json'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download='ganss-profiles.json';a.click();
+  }
+}
+async function importProfiles(ev){
+  const f=ev.target.files[0];if(!f)return;
+  const text=await f.text();
+  const r=await api('profiles.import',{device:devices[0].device_id,data:JSON.parse(text)});
+  if(r.ok){status('ok',`已导入 ${r.result.result.imported} 个配置`);refreshProfiles()}
+  else status('err',r.error.message);
+}
 </script>
 </body>
 </html>
