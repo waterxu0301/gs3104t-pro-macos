@@ -185,9 +185,18 @@ class PluginManager:
     def _probe_group(self, plugin_id, driver, endpoints):
         """Pick the endpoint the driver prefers, open it read-only, probe."""
         transport_info = driver.pick_endpoint(endpoints)
-        from .transport import HidTransport
-        with HidTransport(transport_info['path']) as t:
-            base = driver.probe(t, transport_info['connection'])
+        if transport_info.get('readonly') or transport_info.get('path') is None:
+            base = driver.probe(None, transport_info['connection'])
+        elif hasattr(driver, 'open_transport'):
+            t = driver.open_transport(transport_info)
+            try:
+                base = driver.probe(t, transport_info['connection'])
+            finally:
+                t.close()
+        else:
+            from .transport import HidTransport
+            with HidTransport(transport_info['path']) as t:
+                base = driver.probe(t, transport_info['connection'])
         base['endpoints'] = [{'path': (e['path'].decode('utf-8', 'replace')
                                        if isinstance(e['path'], bytes) else str(e['path'])),
                               'usage_page': f"{e['usage_page']:04X}",

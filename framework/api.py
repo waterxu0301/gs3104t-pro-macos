@@ -74,6 +74,12 @@ class Api:
             return self._handle_mock(method, params)
         with _api_lock:
             plugin_id, driver, manifest, device = self.pm.resolve_device(params['device'])
+            if device.get('readonly'):
+                # bluetooth/readonly devices: state only, no transport
+                if method == 'device.state':
+                    return {'device': device,
+                            'state': driver.read_state(None, device.get('connection', 'bluetooth'))}
+                raise ConfigError('设备当前为只读（蓝牙模式）；配置请切换连接方式')
             conn = self._open_connection(plugin_id, driver, device)
             try:
                 if method == 'device.state':
@@ -131,5 +137,7 @@ class Api:
                               'vendor_id': 0, 'product_id': 0, 'product_string': '',
                               'serial_number': '', 'usage': 0})
         endpoint = driver.pick_endpoint(endpoints)
+        if hasattr(driver, 'open_transport'):
+            return driver.open_transport(endpoint), endpoint['connection']
         t = HidTransport(endpoint['path']).open()
         return t, endpoint['connection']

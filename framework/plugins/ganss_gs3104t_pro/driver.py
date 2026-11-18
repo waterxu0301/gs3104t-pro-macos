@@ -38,18 +38,22 @@ class Driver(BaseDeviceDriver):
     # ---- matching --------------------------------------------------------
 
     def match(self, hid_entry, manifest):
-        # manifest already AND-matched vid/pid/product_regex in PluginManager;
-        # add the usage_page vendor-channel check here.
-        return (hid_entry['usage_page'] == 0xFF60 and
-                PRODUCT_RE.search(hid_entry['product_string']))
+        # 2.4G/wired: FF60 vendor channel. Bluetooth: standard pages only
+        # (config channel absent) — match as read-only display device.
+        if hid_entry['usage_page'] == 0xFF60 and PRODUCT_RE.search(hid_entry['product_string']):
+            return True
+        if PRODUCT_RE.search(hid_entry['product_string']):
+            # bluetooth/wired w/o FF60: accept but the driver marks it readonly
+            return True
+        return False
 
     def pick_endpoint(self, endpoints):
         """FF60 channels: prefer interface 3 (32B short) for wireless, and
-        interface 4 (64B feature) is exposed as usb. Operations decide
-        per-plan; we hand back the short-channel endpoint as primary."""
+        interface 4 (64B feature) is exposed as usb. Bluetooth mode has no
+        FF60 channel — return readonly marker."""
         ff60 = [e for e in endpoints if e['usage_page'] == 0xFF60]
         if not ff60:
-            raise ConfigError('没有可识别的 FF60 配置通道')
+            return {'path': None, 'connection': 'bluetooth', 'readonly': True}
         by_if = {e['interface_number']: e for e in ff60}
         primary = by_if.get(3) or ff60[0]
         return {'path': primary['path'], 'connection': 'wireless' if 3 in by_if else 'usb'}
@@ -57,8 +61,10 @@ class Driver(BaseDeviceDriver):
     # ---- lifecycle -------------------------------------------------------
 
     def probe(self, transport, connection):
-        # Read-only open is itself the probe; a mismatched device would have
-        # failed matching. No side-effect packets sent here.
+        if connection == 'bluetooth':
+            return {'name': 'GANSS GS3104T PRO', 'connection': 'bluetooth',
+                    'readonly': True, 'online': True,
+                    'note': '蓝牙模式：固件不暴露配置通道（配置仅经 2.4G 接收器），请插回接收器以修改设置'}
         return {'name': 'GANSS GS3104T PRO', 'connection': connection,
                 'hint': '映射生效前请按 Fn+Tab 开启驱动自定义按键'}
 
@@ -73,6 +79,12 @@ class Driver(BaseDeviceDriver):
         return self._web_session(transport).probe()
 
     def read_state(self, transport, connection):
+        if connection == 'bluetooth':
+            shadow = load_shadow(self.plugin_id, _default_shadow)
+            return {'connection': 'bluetooth', 'shadow': shadow,
+                    'online': True, 'sleeping': False, 'readonly': True,
+                    'web_protocol': False, 'readback': 'none',
+                    'note': '蓝牙模式只读；配置通道在 2.4G 接收器上'}
         shadow = load_shadow(self.plugin_id, _default_shadow)
         state = {'connection': connection, 'shadow': shadow,
                  'fn_tab_required': True}
@@ -94,6 +106,8 @@ class Driver(BaseDeviceDriver):
     # ---- config operations -------------------------------------------------
 
     def apply_config(self, transport, connection, module, patch):
+        if connection == 'bluetooth':
+            raise ConfigError('蓝牙模式无配置通道；请把键盘切换到 2.4G 或有线后再修改设置')
         if module == 'lighting':
             return self._apply_lighting(transport, connection, patch)
         if module == 'keymap':

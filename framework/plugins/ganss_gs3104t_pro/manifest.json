@@ -6,21 +6,46 @@
   "version": "1.0.0",
   "author": "ganss-driver contributors",
   "license": "MIT",
-
   "match": [
     {
       "vid": "0x05AC",
-      "pid": ["0x024F"],
+      "pid": [
+        "0x024F"
+      ],
       "product_regex": "GS3104T"
+    },
+    {
+      "vid": "0x05AC",
+      "pid": [
+        "0x024F"
+      ],
+      "product_regex": "(?i)GS3104T",
+      "bt_only": true,
+      "note": "蓝牙模式：仅打字，无配置通道，设备只读展示"
     }
   ],
-
-  "capabilities": ["lighting", "keymap", "layers"],
-  "ui_modules": [
-    {"component": "keyboard-canvas", "props": {"layout": "data/keymap.json", "keys": 112}},
-    {"component": "lighting-panel", "props": {"modes": 19, "brightness_max": 5, "speed_max": 5}}
+  "capabilities": [
+    "lighting",
+    "keymap",
+    "layers"
   ],
-
+  "ui_modules": [
+    {
+      "component": "keyboard-canvas",
+      "props": {
+        "layout": "data/keymap.json",
+        "keys": 112
+      }
+    },
+    {
+      "component": "lighting-panel",
+      "props": {
+        "modes": 19,
+        "brightness_max": 5,
+        "speed_max": 5
+      }
+    }
+  ],
   "safety": {
     "default_mode": "SHADOW_STATE_ACK",
     "modules": {
@@ -29,7 +54,10 @@
     },
     "notes": "键位层与全局灯效无硬件回读命令；依赖逐包 ACK + 本地 Shadow State。映射生效需 Fn+Tab 开启驱动自定义模式。"
   },
-
-  "connection": ["wired", "2.4g"],
-  "entry": "driver.Driver"
+  "connection": [
+    "wired",
+    "2.4g"
+  ],
+  "entry": "driver.Driver",
+  "notes_bt": "2.4G 接收器通道 (FF60) 仅在 dongle 上；蓝牙模式固件不暴露配置接口"
 }

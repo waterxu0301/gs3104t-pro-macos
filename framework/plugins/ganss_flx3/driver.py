@@ -1,4 +1,5 @@
 """GANSS FLX3 mouse driver plugin."""
+import platform
 import threading
 import time
 
@@ -25,15 +26,28 @@ class Driver(BaseDeviceDriver):
         return hid_entry['usage_page'] >= 0xFF00 or hid_entry['usage_page'] in (0x01, 0x0C)
 
     def pick_endpoint(self, endpoints):
+        if platform.system() == 'Darwin':
+            return {'path': None, 'connection': 'wired', 'macos_seize': True}
         ff = [e for e in endpoints if e['usage_page'] >= 0xFF00]
         if not ff:
-            # fallback: first interface that exposes a generic collection
             ff = endpoints
         return {'path': ff[0]['path'], 'connection': 'wired'}
+
+    def open_transport(self, endpoint):
+        """Framework hook: on macOS return the IOHIDManager seize transport."""
+        if platform.system() == 'Darwin' and endpoint.get('macos_seize'):
+            from .macos_seize import IOKitSeizeTransport
+            return IOKitSeizeTransport().open()
+        from framework.transport import HidTransport
+        return HidTransport(endpoint['path'], numbered_reports=True).open()
 
     # ---- lifecycle -------------------------------------------------------
 
     def probe(self, transport, connection):
+        if transport is None:
+            return {'name': 'GANSS FLX3', 'connection': connection,
+                    'online': False, 'sleeping': True,
+                    'note': '蓝牙模式或通道不可识别；配置请使用接收器/USB'}
         state = self._read_telemetry(transport)
         info = {'name': 'GANSS FLX3', 'connection': connection}
         if state:
@@ -61,6 +75,11 @@ class Driver(BaseDeviceDriver):
         return None
 
     def read_state(self, transport, connection):
+        if transport is None:
+            shadow = load_shadow(self.plugin_id, _default_shadow)
+            return {'connection': connection, 'shadow': shadow,
+                    'online': False, 'sleeping': True, 'readonly': True,
+                    'note': '蓝牙模式只读；配置请使用接收器/USB'}
         shadow = load_shadow(self.plugin_id, _default_shadow)
         live = self._read_telemetry(transport, wait_ms=300)
         state = {
@@ -116,6 +135,8 @@ class Driver(BaseDeviceDriver):
     # ---- config modules ----------------------------------------------------
 
     def apply_config(self, transport, connection, module, patch):
+        if transport is None:
+            raise ConfigError('蓝牙模式无配置通道；请切换到接收器或 USB 有线')
         fn = {'keymap': self._apply_keymap, 'dpi': self._apply_dpi,
               'dpi_color': self._apply_dpi_color, 'polling': self._apply_polling,
               'lod': self._apply_lod, 'lighting': self._apply_lighting,
