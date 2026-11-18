@@ -3,7 +3,9 @@
 set -e
 cd "$(dirname "$0")/.."
 APP_NAME="GanssDriver"
-VENV="archive/ganss-mac/.venv"
+if [ -x "../.venv/bin/python" ]; then VENV="../.venv"
+elif [ -x "../archive/ganss-mac/.venv/bin/python" ]; then VENV="../archive/ganss-mac/.venv"
+else VENV="../.venv"; fi
 
 $VENV/bin/python -m pip install pyinstaller 2>/dev/null | tail -1
 
