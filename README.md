@@ -19,6 +19,10 @@
 >
 > 🍎 **Mac 上用不了 GANSS 键盘驱动？** 有了它，无需 Windows、无需虚拟机、无需 Boot Camp。
 
+![GS3104T-PRO 键盘助手 主界面](docs/screenshots/home.png)
+
+*主界面：连接状态 / 电量 / 双系统键位切换 / 实时按键高亮预览（macOS 模式，`⌃ ⌥ ⌘` 按实物丝印映射）*
+
 **English**: A native macOS driver app for the GANSS GS3104T-PRO wireless mechanical
 keyboard. The vendor only ships a Windows driver — this project reverse-engineers the
 HID protocol and reimplements lighting control, key remapping, battery monitoring and
@@ -132,6 +136,39 @@ MacAPP/
 UI 实现的 10 条经验（Canvas 依赖不追踪、Auto Layout 崩溃、overlay/position 顺序、
 hit-test 坐标系、List/NavigationSplitView 键盘与点击干预等）见
 [`MacAPP/README.md`](MacAPP/README.md) 的「UI 实现要点」一节。
+
+---
+
+## 🤝 欢迎共创
+
+**这个项目还远未完善，欢迎大佬们一起来修 bug、补功能、完善协议！**
+
+如果你也遇到「GANSS 键盘在 Mac 上不好用」的问题，或者有逆向 / Swift / HID 经验，
+欢迎提 Issue、发 PR，或者只是在 [Discussions](https://github.com/waterxu0301/gs3104t-pro-macos/discussions)
+里聊两句——任何形式的参与都非常欢迎。
+
+### 🐛 已知待解决问题（欢迎认领）
+
+| # | 问题 | 现状 | 难度 |
+|---|---|---|---|
+| 1 | **按键改键物理生效** | 单键/整层帧回显 21/21 全对，但设备未写入生效区；已试 `Fn+Tab`、表尾 `AA55`、key_index 位置修正 | ⭐⭐⭐ 需抓官方 Windows 驱动改键时的 USB 抓包比对 |
+| 2 | **系统配置读取** | `00 07` 各 sub 均返回全 0，字段布局未解 | ⭐⭐ |
+| 3 | **宏事件编码** | `04 15` / `04 19` 格式未解（上游亦声明未恢复） | ⭐⭐⭐ |
+| 4 | **每键 RGB / 音乐律动** | 未真机验证，UI 中已禁用下发 | ⭐⭐ |
+| 5 | **蓝牙模式设置** | FF60 通道在蓝牙下不存在，仅只读 | ⭐⭐ |
+| 6 | **设备侧配置档切换** | 未验证，已改为本地配置档 + 批量下发替代 | ⭐ |
+
+### 💡 你可以这样参与
+
+- **抓包贡献**：用 Wireshark + USBPcap（Windows）抓官方驱动改键/写配置时的报文，发 Issue 附 hex log
+- **协议补全**：对照 [`MacAPP/docs/PROTOCOL.md`](MacAPP/docs/PROTOCOL.md) 的未解项继续逆向
+- **功能补全**：`MacAPP/APP/` 是标准 SwiftPM 工程，`./make_app.sh` 一键构建，`GANSS_CLI=1` 可跑真机自检
+- **其他机型**：协议框架已按机型可配置，欢迎适配 GANSS 其他型号
+
+### 📌 参考
+
+- 逆向方法与踩坑记录见 [`MacAPP/README.md`](MacAPP/README.md)
+- 真机验证数据见 [`MacAPP/docs/VERIFIED.md`](MacAPP/docs/VERIFIED.md)
 
 ---
 
