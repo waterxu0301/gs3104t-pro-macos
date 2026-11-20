@@ -1,13 +1,27 @@
-# GS3104T-PRO macOS 键盘助手
+# GS3104T-PRO macOS 键盘驱动 | GANSS Wireless Keyboard Driver for Mac
 
-> 面向 **GANSS GS3104T-PRO** 机械键盘的 macOS 即开即用驱动 APP —— 通过逆向官方
-> Windows 驱动的 HID 通信协议，在 macOS 上原生实现灯光控制、按键自定义、电量读取等完整功能。
+> **GANSS GS3104T-PRO 无线机械键盘的 macOS 原生驱动** —— 官方只提供 Windows 驱动，
+> 本项目通过逆向其 HID 通信协议，用 Swift/SwiftUI 在 macOS 上原生实现全部核心功能：
+> **RGB 灯光控制、按键自定义（改键）、电量实时读取、双系统键位映射**，开箱即用。
+>
+> 🍎 **Mac 上用不了 GANSS 键盘驱动？** 有了它，无需 Windows、无需虚拟机、无需 Boot Camp。
 
-**非官方项目**，与 GANSS 无关联。协议逆向仅用于个人学习与研究。
+**English**: A native macOS driver app for the GANSS GS3104T-PRO wireless mechanical
+keyboard. The vendor only ships a Windows driver — this project reverse-engineers the
+HID protocol and reimplements lighting control, key remapping, battery monitoring and
+dual-system (Windows/macOS) key labels natively in Swift. Works over the 2.4G dongle
+and USB, no Windows required.
+
+**适用场景 / You might be looking for**：GANSS 键盘 Mac 驱动 · GS3104T-PRO macOS 支持 ·
+无线键盘 macOS 灯光控制 · 机械键盘 Mac 改键 · 三模键盘 2.4G macOS ·
+GANSS keyboard macOS driver · keyboard remap mac · RGB control macos
 
 ---
 
 ## 功能
+
+解决了「GANSS 键盘在 Mac 上无法调灯光、无法改键、看不到电量」的问题：
+
 
 | 功能 | 通路 | 状态 |
 |---|---|---|
