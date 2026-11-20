@@ -1,5 +1,18 @@
 # GS3104T-PRO macOS 键盘驱动 | GANSS Wireless Keyboard Driver for Mac
 
+[![Release](https://img.shields.io/github/v/release/waterxu0301/gs3104t-pro-macos?label=%E4%B8%8B%E8%BD%BD)](https://github.com/waterxu0301/gs3104t-pro-macos/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![macOS](https://img.shields.io/badge/macOS-13%2B-blue.svg)](https://github.com/waterxu0301/gs3104t-pro-macos)
+[![Swift](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org)
+
+## 📥 下载即用
+
+**[⬇️ 点此下载最新版本](https://github.com/waterxu0301/gs3104t-pro-macos/releases/latest)** —— 解压双击即可运行，**无需安装 Xcode、无需构建**。
+
+首次运行需在「系统设置 → 隐私与安全性 → 输入监控」授权（见下文）。
+
+---
+
 > **GANSS GS3104T-PRO 无线机械键盘的 macOS 原生驱动** —— 官方只提供 Windows 驱动，
 > 本项目通过逆向其 HID 通信协议，用 Swift/SwiftUI 在 macOS 上原生实现全部核心功能：
 > **RGB 灯光控制、按键自定义（改键）、电量实时读取、双系统键位映射**，开箱即用。
