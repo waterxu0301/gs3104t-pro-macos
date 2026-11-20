@@ -13,3 +13,19 @@ ref-*/official*
 # ref-yunjianj/ 已含完整协议报告，入库
 __pycache__/
 *.pyc
+
+# 开源发布排除项
+ref-yunjianj/
+GS3104T-PRO驱动*/
+extracted/
+driver_app/
+probe/
+analysis/*.log
+.DS_Store
+*.dSYM
+
+# SwiftPM 构建产物与打包产物（不入库，二进制走 GitHub Releases）
+MacAPP/APP/.build/
+MacAPP/APP/dist/
+MacAPP/APP/Resources/icons/
+MacAPP/APP/Resources/AppIcon.iconset/

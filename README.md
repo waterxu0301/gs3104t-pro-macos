@@ -1,67 +1,120 @@
-# GANSS Device Hub
+# GS3104T-PRO macOS 键盘助手
 
-本地化、插件化、跨平台的开源键鼠驱动框架。首两款设备：
+> 面向 **GANSS GS3104T-PRO** 机械键盘的 macOS 即开即用驱动 APP —— 通过逆向官方
+> Windows 驱动的 HID 通信协议，在 macOS 上原生实现灯光控制、按键自定义、电量读取等完整功能。
 
-| 设备 | 类型 | 通道 | 功能 |
-|---|---|---|---|
-| GANSS GS3104T PRO 键盘（DSM24 批次） | keyboard | 2.4G 接收器 / USB / BT(只读) | 灯光（19 模式全参数：颜色/亮度/速度/炫彩/方向）、单键/组合键/媒体键/禁用键映射、整层下发、配置文件 |
-| GANSS FLX3 鼠标 | mouse | 2.4G 接收器 / USB | 按键映射、多档 DPI、回报率、LOD、电源、Sensor 高阶、灯光、宏、出厂恢复（经 WebHID 桥） |
+**非官方项目**，与 GANSS 无关联。协议逆向仅用于个人学习与研究。
 
-**数据不出本机**——服务只绑定 `127.0.0.1:8340`，无云端依赖。
+---
 
-## 架构
+## 功能
 
-```
-浏览器 UI (Material Design 3, framework/web/)
-  ├── JSON API (framework/api.py, api_version 2)
-  │     ├── 后端 hidapi 通道 (framework/transport.py)
-  │     │     └── plugins/<device>/driver.py → BaseDeviceDriver
-  │     └── FLX3 走浏览器 WebHID 桥（与官方驱动同款传输层，授权一次持久化）
-  ├── SafetyGuard 双模式安全写入 (framework/safety.py)
-  │     ├── HARDWARE_READBACK — 读→改→写→回读校验→回滚
-  │     └── SHADOW_STATE_ACK — 本地 shadow 基线→下发→逐包 ACK→原子落盘
-  └── PluginManager (manifest.json 多条件 AND 匹配，防 VID 混叠/触控板误伤)
-```
+| 功能 | 通路 | 状态 |
+|---|---|---|
+| 连接状态 / 电量 / 设备信息 | `02` `20` | ✅ 真机验证 |
+| 灯光模式 · 颜色 · 亮度 · 速度 · 方向 | `05` 单包 | ✅ 背光实测生效 |
+| 按键自定义（主层 / Fn 层） | `03`/`0D` 单键、`10`/`12` 整层 | ⚠️ 帧回显通过，物理生效待解 |
+| 实时按键预览（含双系统键位） | 键盘 boot 接口原始输入 | ✅ 无需额外逻辑 |
+| 预览模式开关 | 仅视觉高亮，不下发指令 | ✅ |
+| Windows / macOS 双系统键位映射 | 按实物丝印映射 | ✅ |
+| 系统配置（响应时间 / 休眠 / 禁用键） | 64B 会话 | ⚠️ 写通路未真机验证 |
+| 宏管理器 | — | ⚠️ 编辑可用，事件编码未解 |
 
-## 快速开始（macOS）
+**不支持**：侧灯、TFT 屏（本机型硬件无此配置）、蓝牙模式设置。
 
-```sh
-git clone <repo> && cd GANSS_Drive
-./start.sh          # 端口清理 + 启动 http://127.0.0.1:8340/
-```
+**限制**：键位映射生效需按 `Fn+Tab` 开启驱动自定义按键（官方固件行为）；
+键盘模式由固件切换：`Fn+A` → Windows，`Fn+S` → macOS。
 
-依赖：Python 3.12 venv（`archive/ganss-mac/.venv` 内含 `hidapi`），
-可选 `pip install pyobjc`（FLX3 seize 通道）。
+---
 
-FLX3 首次使用需在页面点击「授权浏览器直连」，Chrome 弹出 WebHID 选择器中
-选一次鼠标（授权持久化，与官方驱动同款传输层）。
+## 构建
 
-### Gatekeeper（macOS）
-
-`codesign -s -` 签名的 app 首次打开若被拦截：
-
-```sh
-xattr -cr /Applications/GanssDriver.app
+```bash
+cd APP
+./make_app.sh                    # 构建 + 打包 + 签名
+open "dist/GS3104T-PRO 键盘助手.app"
 ```
 
-## 运行测试
+要求：macOS 13+、Xcode（需要完整 SDK，CommandLineTools 不足）。
 
-```sh
-.venv/bin/python tests/test_flx3.py         # 38 项鼠标黄金报文
-.venv/bin/python tests/test_kb_protocol.py  # 24 项键盘协议
+### 真机自检（不开窗口，走 GUI 同一套代码路径）
+
+```bash
+GANSS_CLI=1 "dist/GS3104T-PRO 键盘助手.app/Contents/MacOS/GANSSKeyboard"
+# 期望：RESULT: ALL PASS
 ```
 
-## 已知限制
+---
 
-- 键盘映射生效前需按 **Fn+Tab** 开启「驱动自定义按键」模式（DSM24 固件）
-- 键盘蓝牙模式固件不暴露配置通道，仅展示设备状态
-- 5 分钟无操作键盘自动休眠，写入会触发唤醒重试（按任意键可加速）
-- 键盘宏不在支持范围（与官方 Windows 驱动 v1.0.0.3 的本地配置能力对齐；
-  FLX3 鼠标宏完整支持）
+## 首次运行：输入监控权限
 
-## 致谢
+**实时按键预览需要「输入监控」权限**（macOS 强制要求，无法绕过）：
 
-协议逆向基于 [yunjianj/GANSS_GS3104T_Pro](https://github.com/yunjianj/GANSS_GS3104T_Pro)
-（MIT），其 `NOTICE.md` 归档于 `ref-yunjianj/`。FLX3 协议来自对官方网页驱动
-JS 的静态分析（`analysis/FLX3_逆向报告.md`）。非官方软件，与 GANSS/HFD/SONiX/
-远大芯科技无隶属关系。
+1. 打开 App，首页显示橙色引导横幅 → 点 **「打开系统设置」**
+2. 系统设置 → 隐私与安全性 → **输入监控** → 添加本 App 并**开启**
+3. **点红灯退出后重新打开**（TCC 权限变更对运行中的进程不生效）
+
+> 权限不足时 KeyMonitor 返回 `kIOReturnNotPrivileged`（`0xe00002e2`）；
+> 灯控与电量**仍可用**（vendor 通道不需该权限），仅实时按键预览失效。
+> 从终端启动的实例会继承终端权限，开发时无需单独授权。
+
+**退出行为**：点红灯（关闭窗口）即彻底退出进程，不留后台、不留 Dock 残留。
+
+---
+
+## 协议摘要
+
+设备：`05AC:024F`，2.4G 模式配置接口 `UsagePage FF60 / Usage 61`，**MI_03（32 字节）为唯一命令通道**；MI_04（64B）仅回固定状态包 `0f 01 01 11`，应忽略。
+
+```
+帧（32B）: [0]=cmd [1]=len [2]=sub [3..]=payload [31]=checksum(sum(b[0..30]) & 0xFF)
+应答:     头 3 字节回显 + 数据 + 同规则校验和
+```
+
+已验证命令：`02` 设备信息、`20` 电量、`05` 灯光、`03`/`0D` 单键、`10`/`12` 整层。
+
+**休眠行为**：2.4G 空闲休眠时 MI_03 零应答，按任意键唤醒（APP 会自动检测并恢复）。
+
+完整协议见 [`MacAPP/docs/PROTOCOL.md`](MacAPP/docs/PROTOCOL.md)，
+真机验证记录见 [`MacAPP/docs/VERIFIED.md`](MacAPP/docs/VERIFIED.md)。
+
+---
+
+## 项目结构
+
+```
+MacAPP/
+├── APP/
+│   ├── Sources/GANSSKeyboard/
+│   │   ├── HID/KeyboardTransport.swift   IOHIDManager 收发（MI_03 32B）
+│   │   ├── HID/KeyMonitor.swift          按键实时监听（boot 键盘接口）
+│   │   ├── HID/HeadlessTest.swift        真机自检 CLI
+│   │   ├── Protocol/GanssProtocol.swift  帧构造/校验和/命令
+│   │   ├── Model/                        布局解析、状态、配置档
+│   │   └── Views/                        SwiftUI 界面
+│   ├── Resources/                        键盘布局 XML、应用图标
+│   ├── make_app.sh                       构建打包脚本
+│   └── icon_gen.swift                    图标生成（CoreGraphics 自绘）
+└── docs/                                 逆向分析与协议文档
+```
+
+---
+
+## 开发踩坑记录
+
+UI 实现的 10 条经验（Canvas 依赖不追踪、Auto Layout 崩溃、overlay/position 顺序、
+hit-test 坐标系、List/NavigationSplitView 键盘与点击干预等）见
+[`MacAPP/README.md`](MacAPP/README.md) 的「UI 实现要点」一节。
+
+---
+
+## 免责声明
+
+- 本项目通过逆向工程分析官方驱动的 HID 通信协议，**仅供个人学习与研究使用**
+- 不包含任何官方驱动的二进制文件、固件或受版权保护的资源
+- 键盘布局 XML 仅包含键位坐标等事实性数据
+- 使用本软件修改键盘配置的风险由使用者自行承担
+
+## License
+
+[MIT](LICENSE)
