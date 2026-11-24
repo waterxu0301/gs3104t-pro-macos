@@ -326,10 +326,11 @@ struct RemapView: View {
                 .pickerStyle(.segmented)
                 .frame(width: 200)
                 Button("恢复整层默认") {
+                    model.markUserAction()
                     model.resetLayer(layer: layer)
                 }
                 .disabled(model.busy)
-                Button("应用整层到键盘") { model.applyFullLayer(layer: layer) }
+                Button("应用整层到键盘") { model.markUserAction(); model.applyFullLayer(layer: layer) }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.busy)
             }
@@ -457,12 +458,12 @@ struct BindingEditor: View {
                     Button("应用到键盘") {
                         var b = model.keyBindings.first { $0.keyId == key.id && $0.layer == layer }
                         b?.target = currentTarget
-                        if let b { model.applySingleKey(b) }
+                        if let b { model.markUserAction(); model.applySingleKey(b) }
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.busy)
 
-                    Button("整层下发") { model.applyFullLayer(layer: layer) }
+                    Button("整层下发") { model.markUserAction(); model.applyFullLayer(layer: layer) }
                         .disabled(model.busy)
                 }
                 Text("帧格式已对齐上游（key_index 在 sub 字段），回显通过；物理生效待排查。")

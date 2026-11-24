@@ -10,7 +10,7 @@ struct LightingView: View {
             HStack {
                 Text("灯光模式").font(.title2.bold())
                 Spacer()
-                Button("应用到键盘") { model.applyLighting() }
+                Button("应用到键盘") { model.markUserAction(); model.applyLighting() }
                     .buttonStyle(.borderedProminent)
                     .disabled(model.busy)
             }

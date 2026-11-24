@@ -292,7 +292,7 @@ struct SystemConfigView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 HStack {
-                    Button("应用到键盘") { model.applySystemConfig() }
+                    Button("应用到键盘") { model.markUserAction(); model.applySystemConfig() }
                         .buttonStyle(.borderedProminent)
                         .disabled(model.busy)
                     Button("尝试读取") { model.readSystemConfig() }
@@ -478,6 +478,7 @@ struct ProfilesView: View {
                                 model.keyBindings[i] = b
                             }
                         }
+                        model.markUserAction()
                         model.applyLighting()
                         model.applyFullLayer(layer: .top)
                         model.applyFullLayer(layer: .fn)

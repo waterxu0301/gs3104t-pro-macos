@@ -43,6 +43,16 @@ public final class AppModel: ObservableObject {
     @Published public var keyboardMode: KeyboardMode = .mac
     /// 缺少「输入监控」权限（实时按键预览不可用）
     @Published public var needsInputPermission = false
+
+    // MARK: - 写入保护
+    /// 启动/连接阶段保护：从 `start()` 到首次连接读取完成期间拒绝一切写入。
+    /// 原则：启动、USB/2.4G 连接、休眠唤醒恢复阶段 100% 只读
+    /// （仅允许 02 设备信息与 20 电量查询），任何写入必须由用户显式交互触发。
+    private var startupPhase = true
+    /// 最近一次用户显式交互时间（用于区分「用户点击」与「自动触发」）
+    private var lastUserAction: Date?
+    /// 写入审计日志：每次拒绝或放行都记录，便于诊断
+    @Published public var writeAudit: [String] = []
     private let keyMonitor = KeyMonitor()
 
     public let transport = KeyboardTransport()
@@ -137,6 +147,7 @@ public final class AppModel: ObservableObject {
             battery = try await proto.readBattery()
             connection = .connected(String(format: "VID %04X PID %04X · 电量 %d%%",
                                            deviceInfo?.vid ?? 0, deviceInfo?.pid ?? 0, battery ?? 0))
+            releaseStartupGuard()
             notice = nil
             lastError = nil
         } catch GanssProtocol.ProtocolError.asleep {
@@ -164,6 +175,37 @@ public final class AppModel: ObservableObject {
                 } else { return }
             }
         }
+    }
+
+    // MARK: - 写入守卫
+
+    /// 由所有 `Button` 回调在调用 `apply*` 前调用，标记「用户显式操作」。
+    public func markUserAction() {
+        lastUserAction = Date()
+    }
+
+    /// 写入前的统一检查：启动阶段一律拒绝；仅放行用户显式触发的写入。
+    private func guardWrite(_ what: String) -> Bool {
+        if startupPhase {
+            let msg = "⚠️ 启动保护：拒绝下发 \(what)（启动/连接阶段只读）"
+            writeAudit.append(msg)
+            notice = msg
+            NSLog("[WriteGuard] %@", msg)
+            return false
+        }
+        guard let last = lastUserAction, Date().timeIntervalSince(last) < 30 else {
+            let msg = "⚠️ 拒绝下发 \(what)：非用户显式操作触发"
+            writeAudit.append(msg)
+            NSLog("[WriteGuard] %@", msg)
+            return false
+        }
+        writeAudit.append("✅ 放行 \(what)（用户操作）")
+        return true
+    }
+
+    /// 启动保护解除（首次成功读取状态后）
+    private func releaseStartupGuard() {
+        startupPhase = false
     }
 
     // MARK: - 操作入口
@@ -196,6 +238,7 @@ public final class AppModel: ObservableObject {
     // MARK: - 灯光
 
     public func applyLighting() {
+        guard guardWrite("灯光 05") else { return }
         let l = lighting
         run("写入灯光") { [weak self] in
             guard let self else { return }
@@ -212,6 +255,7 @@ public final class AppModel: ObservableObject {
 
     /// 单键下发（真机验证通路）。
     public func applySingleKey(_ binding: KeyBinding) {
+        guard guardWrite("单键 03/0D") else { return }
         guard let key = layout.keys.first(where: { $0.id == binding.keyId }) else { return }
         run("写入 \(key.name)") { [weak self] in
             guard let self else { return }
@@ -222,6 +266,7 @@ public final class AppModel: ObservableObject {
 
     /// 整层下发（21 块）。
     public func applyFullLayer(layer: KeyLayer) {
+        guard guardWrite("整层 10/12") else { return }
         run("写入\(layer.displayName)整层") { [weak self] in
             guard let self else { return }
             var table = [UInt8](repeating: 0, count: 576)
@@ -240,6 +285,7 @@ public final class AppModel: ObservableObject {
 
     /// 恢复整层默认。
     public func resetLayer(layer: KeyLayer) {
+        guard guardWrite("整层重置 10/12") else { return }
         run("恢复\(layer.displayName)默认") { [weak self] in
             guard let self else { return }
             var table = [UInt8](repeating: 0, count: 576)
@@ -255,6 +301,7 @@ public final class AppModel: ObservableObject {
     // MARK: - 系统配置
 
     public func applySystemConfig() {
+        guard guardWrite("系统配置 04 18") else { return }
         run("写入系统配置") { [weak self] in
             guard let self else { return }
             try await self.proto.writeSystemConfig(self.systemConfig)

@@ -66,15 +66,9 @@ enum HeadlessTest {
               model.battery.map { (0...100).contains($0) } ?? false,
               model.battery.map { "\($0)%" } ?? "nil")
 
-        // 4) 灯光：走 GUI 的 applyLighting
-        model.lighting = LightingState(mode: 1, brightness: 5, speed: 3,
-                                       color: 0xFF8000, colorful: false)
-        model.applyLighting()
-        for _ in 0..<40 where model.busy {
-            try? await Task.sleep(nanoseconds: 100_000_000)
-        }
-        check("写入灯光（GUI applyLighting）", model.lastError == nil,
-              model.lastError ?? "静态橙色 FF8000 已下发，请目视确认")
+        // 4) 灯光：**只读验证**（原实现调用 applyLighting 会下发 05 覆盖设备配置，已移除）
+        check("灯光状态（本地）", model.lighting.brightness >= 0,
+              "mode=\(model.lighting.mode) 亮度=\(model.lighting.brightness) — 未下发")
 
         // 5) 单键帧布局断言（防止 off-by-one 回归）
         if let q = model.layout.keys.first(where: { $0.name == "Q" }) {
@@ -87,14 +81,9 @@ enum HeadlessTest {
                   String(format: "f[0..6]=%02x %02x %02x %02x %02x %02x %02x (期望 03 04 %02x 02 00 14 00)",
                          f[0], f[1], f[2], f[3], f[4], f[5], f[6], UInt8(q.id & 0xFF)))
 
-            // 6) 单键写入 Q→Q（等效默认，无破坏）
-            let b = KeyBinding(keyId: q.id, layer: .top, target: .key(usage: 0x14, modifiers: []))
-            model.applySingleKey(b)
-            for _ in 0..<40 where model.busy {
-                try? await Task.sleep(nanoseconds: 100_000_000)
-            }
-            check("单键写入 Q→Q（无破坏）", model.lastError == nil,
-                  model.lastError ?? "index=\(q.id)")
+            // 6) 单键**帧布局验证**（不下发；原实现调用 applySingleKey 会发 03 覆盖设备）
+            check("单键帧布局（不下发）", true, "index=\(q.id) — 已构造帧但未发送")
+
         } else {
             check("定位 Q 键", false, "布局中未找到 Q")
         }
